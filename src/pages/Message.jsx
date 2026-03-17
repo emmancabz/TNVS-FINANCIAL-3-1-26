@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Send } from 'lucide-react'
 import { supabase } from '@/database/supabase'
+import { useLocation } from 'react-router-dom'
 
 const formatTimestamp = (value) => {
   if (!value) return ''
@@ -36,6 +37,18 @@ function Message() {
   const [adminQuery, setAdminQuery] = useState('')
   const [selectedAdmin, setSelectedAdmin] = useState(null)
   const bottomRef = useRef(null)
+  const didPrefillRef = useRef(false)
+  const location = useLocation()
+
+  useEffect(() => {
+    if (didPrefillRef.current) return
+    const statePrefill = location?.state?.prefill
+    const queryPrefill = new URLSearchParams(location?.search || '').get('prefill')
+    const prefill = typeof statePrefill === 'string' ? statePrefill : typeof queryPrefill === 'string' ? decodeURIComponent(queryPrefill) : ''
+    if (!prefill) return
+    setMessageInput((prev) => (prev.trim().length ? prev : prefill))
+    didPrefillRef.current = true
+  }, [location])
 
   useEffect(() => {
     const loadCurrentUser = async () => {

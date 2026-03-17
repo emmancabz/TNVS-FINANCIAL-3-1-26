@@ -1,5 +1,14 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { supabase } from "../../database/supabase";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -36,7 +45,7 @@ const UtilizationBar = ({ actual, committed, limit }) => {
           style={{ width: `${committedPct}%` }}
         />
         <div
-          className={`absolute inset-y-0 left-0 rounded-full ${isOver ? "bg-red-500" : "bg-emerald-500"}`}
+          className={`absolute inset-y-0 left-0 rounded-full ${isOver ? "bg-red-500" : "bg-indigo-500"}`}
           style={{ width: `${actualPct}%` }}
         />
       </div>
@@ -52,72 +61,149 @@ const UtilizationBar = ({ actual, committed, limit }) => {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 // ─── SMART CALENDAR COMPONENT ────────────────────────────────────────────────
-const EnterpriseCalendar = ({ requests }) => {
+const EnterpriseCalendar = ({ requests, allocatedDates, depletedDates }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   
   const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
   const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
+
+  const toDateKey = (date) => {
+    if (!(date instanceof Date) || !Number.isFinite(date.getTime())) return null;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
   
   const mappedRequests = useMemo(() => {
     const data = {};
     (requests || []).forEach(r => {
-      const d = r.createdAt ? new Date(r.createdAt).toDateString() : null;
-      if (!d) return;
-      if (!data[d]) data[d] = [];
-      data[d].push(r);
+      const dt = r?.createdAt ? new Date(r.createdAt) : null;
+      const key = dt ? toDateKey(dt) : null;
+      if (!key) return;
+      if (!data[key]) data[key] = [];
+      data[key].push(r);
     });
     return data;
   }, [requests]);
 
   return (
-    <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm overflow-hidden flex flex-col h-full border-b-4 border-b-emerald-600/20">
-      <div className="p-6 bg-emerald-50/50 border-b border-emerald-100 flex items-center justify-between">
+    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+      <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-emerald-600 rounded-2xl text-white shadow-lg shadow-emerald-100 flex items-center justify-center">
+          <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100 flex items-center justify-center">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
           </div>
           <div>
-            <h3 className="font-black text-emerald-950 leading-tight text-lg">Request Timeline</h3>
-            <p className="text-[10px] text-emerald-600 font-black uppercase tracking-[0.2em]">Budget Activity Log</p>
+            <h3 className="font-black text-slate-900 leading-tight text-lg">Budget Allocation Calendar</h3>
+            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">Allocated · Depleted · Monthly Refresh</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-emerald-100 shadow-sm">
-          <button onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-2 hover:bg-emerald-50 rounded-xl text-emerald-600 transition-colors">◄</button>
-          <span className="text-xs font-black text-emerald-900 px-3 min-w-[130px] text-center uppercase tracking-tighter">{monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
-          <button onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-2 hover:bg-emerald-50 rounded-xl text-emerald-600 transition-colors">►</button>
+        <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm">
+          <button onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-2 hover:bg-slate-50 rounded-xl text-indigo-600 transition-colors">◄</button>
+          <span className="text-xs font-black text-slate-900 px-3 min-w-[130px] text-center uppercase tracking-tighter">{monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
+          <button onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-2 hover:bg-slate-50 rounded-xl text-indigo-600 transition-colors">►</button>
         </div>
       </div>
       
       <div className="p-6 grid grid-cols-7 gap-3 flex-1">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-          <div key={d} className="text-[10px] font-black text-emerald-300 uppercase text-center mb-2 tracking-widest">{d}</div>
+          <div key={d} className="text-[10px] font-black text-slate-400 uppercase text-center mb-2 tracking-widest">{d}</div>
         ))}
         {Array(firstDay).fill(null).map((_, i) => <div key={`pad-${i}`} />)}
         {Array.from({ length: daysInMonth }, (_, i) => {
           const d = i + 1;
-          const fullDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d).toDateString();
-          const dayReqs = mappedRequests[fullDate] || [];
-          const isToday = new Date().toDateString() === fullDate;
+          const cellDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d);
+          const fullKey = toDateKey(cellDate);
+          const dayReqs = (fullKey && mappedRequests[fullKey]) || [];
+          const todayKey = toDateKey(new Date());
+          const isToday = !!fullKey && !!todayKey && todayKey === fullKey;
+          const isRefresh = d === 1;
+          const isAllocated = !!fullKey && !!allocatedDates?.has?.(fullKey);
+          const isDepleted = !!fullKey && !!depletedDates?.has?.(fullKey);
 
           return (
-            <div key={d} className={`relative min-h-[60px] border border-emerald-50 rounded-2xl p-2 transition-all hover:border-emerald-300 hover:bg-emerald-50/50 group cursor-default ${isToday ? 'bg-emerald-100/30 border-emerald-300 ring-4 ring-emerald-50' : ''}`}>
-              <span className={`text-xs font-black ${isToday ? 'text-emerald-700' : 'text-gray-400'}`}>{d}</span>
+            <div key={d} className={`relative min-h-[60px] border border-slate-100 rounded-2xl p-2 transition-all hover:border-slate-300 hover:bg-slate-50 group cursor-default ${isToday ? 'bg-indigo-50/60 border-indigo-300 ring-4 ring-indigo-50' : ''}`}>
+              <span className={`text-xs font-black ${isToday ? 'text-indigo-700' : 'text-gray-400'}`}>{d}</span>
               <div className="mt-2 flex flex-wrap gap-1">
                 {dayReqs.slice(0, 4).map((req, idx) => (
                   <div key={idx} className={`h-2 w-2 rounded-full shadow-sm ${req.status === 'Approved' ? 'bg-emerald-500' : req.status === 'Pending' ? 'bg-amber-400' : 'bg-red-400'}`} title={req.categoryName} />
                 ))}
-                {dayReqs.length > 4 && <span className="text-[8px] font-black text-emerald-600">+{dayReqs.length - 4}</span>}
+                {dayReqs.length > 4 && <span className="text-[8px] font-black text-slate-500">+{dayReqs.length - 4}</span>}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {isAllocated && (
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-blue-50 text-blue-700 border border-blue-100">
+                    Allocated
+                  </span>
+                )}
+                {isDepleted && (
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-rose-50 text-rose-700 border border-rose-100">
+                    Depleted
+                  </span>
+                )}
+                {isRefresh && (
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    Refresh
+                  </span>
+                )}
               </div>
             </div>
           );
         })}
       </div>
-      <div className="px-6 py-4 bg-emerald-50/30 border-t border-emerald-100 flex gap-6">
-        <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm" /><span className="text-[10px] font-black text-emerald-800 uppercase">Approved</span></div>
-        <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm" /><span className="text-[10px] font-black text-emerald-800 uppercase">Pending</span></div>
-        <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-red-400 shadow-sm" /><span className="text-[10px] font-black text-emerald-800 uppercase">Rejected</span></div>
+      <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex gap-6">
+        <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm" /><span className="text-[10px] font-black text-slate-700 uppercase">Approved</span></div>
+        <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm" /><span className="text-[10px] font-black text-slate-700 uppercase">Pending</span></div>
+        <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-red-400 shadow-sm" /><span className="text-[10px] font-black text-slate-700 uppercase">Rejected</span></div>
       </div>
+    </div>
+  );
+};
+
+const YearlyRequestFrequencyGraph = ({ data, onOpenBreakdown }) => {
+  const safe = Array.isArray(data) ? data : [];
+  const max = safe.reduce((m, r) => Math.max(m, Number(r?.count || 0)), 0);
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col h-full min-h-0">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
+            Yearly Request Frequency
+          </p>
+          <h3 className="text-lg font-black text-slate-900 mt-1">
+            Requests per Month (Last 12)
+          </h3>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenBreakdown}
+          className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100 transition-colors shrink-0"
+        >
+          View Breakdown
+        </button>
+      </div>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onOpenBreakdown}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " " ? onOpenBreakdown?.() : null)}
+        className="flex-1 min-h-0 rounded-2xl border border-slate-200 bg-slate-50 p-3 hover:bg-slate-50/70 transition-colors cursor-pointer"
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={safe}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} allowDecimals={false} domain={[0, Math.max(1, max)]} />
+            <Tooltip />
+            <Line type="monotone" dataKey="count" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="mt-3 text-[11px] text-slate-600">
+        Click the graph to see department request frequency details.
+      </p>
     </div>
   );
 };
@@ -163,6 +249,7 @@ function BudgetManagement() {
   const [setupDraft, setSetupDraft] = useState({});
   const [setupSaving, setSetupSaving] = useState(false);
   const [setupError, setSetupError] = useState("");
+  const [freqModalOpen, setFreqModalOpen] = useState(false);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   // Look up a fin_budget_categories record by its UUID id.
@@ -257,6 +344,7 @@ function BudgetManagement() {
           periodYear: b.period_year,
           periodMonth: b.period_month,
           notes: b.notes ?? "",
+          updatedAt: b.updated_at ?? null,
         })),
       );
     } catch (err) {
@@ -625,6 +713,7 @@ function BudgetManagement() {
               : r,
           ),
         );
+        await Promise.all([loadBudgetOverview(), loadHrRequests()]);
         handleCloseRequest();
         return;
       }
@@ -740,7 +829,7 @@ function BudgetManagement() {
             : r,
         ),
       );
-      await loadBudgetOverview();
+      await Promise.all([loadBudgetOverview(), loadRequests()]);
       handleCloseRequest();
     } catch (err) {
       console.error("APPROVAL ERROR:", err);
@@ -778,6 +867,7 @@ function BudgetManagement() {
               : r,
           ),
         );
+        await Promise.all([loadBudgetOverview(), loadHrRequests()]);
         handleCloseRequest();
         return;
       }
@@ -800,6 +890,7 @@ function BudgetManagement() {
             : r,
         ),
       );
+      await Promise.all([loadBudgetOverview(), loadRequests()]);
       handleCloseRequest();
     } catch {
       setActionError("Failed to reject request. Please try again.");
@@ -859,6 +950,113 @@ function BudgetManagement() {
     ],
     [budgetRequests, hrRequests],
   );
+
+  const budgetDeptById = useMemo(() => {
+    const m = new Map();
+    (rows || []).forEach((r) => {
+      if (!r?.budgetId) return;
+      m.set(r.budgetId, r?.department || "General");
+    });
+    return m;
+  }, [rows]);
+
+  const allocatedDateKeys = useMemo(() => {
+    const s = new Set();
+    (rows || []).forEach((r) => {
+      const dt = r?.updatedAt ? new Date(r.updatedAt) : null;
+      if (!dt || !Number.isFinite(dt.getTime())) return;
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      s.add(key);
+    });
+    return s;
+  }, [rows]);
+
+  const depletedDateKeys = useMemo(() => {
+    const depleted = (rows || []).filter((r) => num(r?.limit) > 0 && num(r?.actual) + num(r?.committed) >= num(r?.limit));
+    const latestByBudgetId = new Map();
+    (budgetRequests || []).forEach((req) => {
+      if (req?.status !== "Approved") return;
+      const budgetId = req?.budgetManagementId;
+      if (!budgetId) return;
+      const dt = req?.createdAt ? new Date(req.createdAt) : null;
+      const t = dt?.getTime?.();
+      if (!Number.isFinite(t)) return;
+      const prev = latestByBudgetId.get(budgetId);
+      if (prev == null || t > prev) latestByBudgetId.set(budgetId, t);
+    });
+    const s = new Set();
+    depleted.forEach((r) => {
+      const t = latestByBudgetId.get(r?.budgetId);
+      if (!Number.isFinite(t)) return;
+      const dt = new Date(t);
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      s.add(key);
+    });
+    return s;
+  }, [rows, budgetRequests]);
+
+  const monthSeed = new Date().toISOString().slice(0, 7);
+  const frequencyData = useMemo(() => {
+    const base = new Date();
+    const start = new Date(base.getFullYear(), base.getMonth() - 11, 1).getTime();
+    const endExclusive = new Date(base.getFullYear(), base.getMonth() + 1, 1).getTime();
+    const months = [...Array(12)].map((_, i) => {
+      const dt = new Date(base.getFullYear(), base.getMonth() - (11 - i), 1);
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      const label = `${dt.toLocaleString("en-PH", { month: "short" })} ${String(dt.getFullYear()).slice(2)}`;
+      return { key, label };
+    });
+    const m = new Map(months.map((x) => [x.key, 0]));
+
+    const add = (createdAt) => {
+      const dt = createdAt ? new Date(createdAt) : null;
+      const t = dt?.getTime?.();
+      if (!Number.isFinite(t) || t < start || t >= endExclusive) return;
+      const mk = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      if (!m.has(mk)) return;
+      m.set(mk, (m.get(mk) || 0) + 1);
+    };
+
+    (budgetRequests || []).forEach((r) => add(r?.createdAt));
+    (hrRequests || []).forEach((r) => add(r?.createdAt));
+
+    return months.map((x) => ({ ...x, count: m.get(x.key) || 0 }));
+  }, [budgetRequests, hrRequests, monthSeed]);
+
+  const departmentFrequency = useMemo(() => {
+    const base = new Date();
+    const start = new Date(base.getFullYear(), base.getMonth() - 11, 1).getTime();
+    const endExclusive = new Date(base.getFullYear(), base.getMonth() + 1, 1).getTime();
+    const m = new Map();
+    const bump = (dept, source) => {
+      const key = String(dept || "General");
+      const prev = m.get(key) || { department: key, total: 0, operational: 0, hr: 0 };
+      const next = {
+        ...prev,
+        total: prev.total + 1,
+        operational: prev.operational + (source === "operational" ? 1 : 0),
+        hr: prev.hr + (source === "hr" ? 1 : 0),
+      };
+      m.set(key, next);
+    };
+
+    (budgetRequests || []).forEach((r) => {
+      const dt = r?.createdAt ? new Date(r.createdAt) : null;
+      const t = dt?.getTime?.();
+      if (!Number.isFinite(t) || t < start || t >= endExclusive) return;
+      const dept = budgetDeptById.get(r?.budgetManagementId) || "General";
+      bump(dept, "operational");
+    });
+
+    (hrRequests || []).forEach((r) => {
+      const dt = r?.createdAt ? new Date(r.createdAt) : null;
+      const t = dt?.getTime?.();
+      if (!Number.isFinite(t) || t < start || t >= endExclusive) return;
+      bump("HR", "hr");
+    });
+
+    return Array.from(m.values()).sort((a, b) => b.total - a.total);
+  }, [budgetRequests, hrRequests, budgetDeptById, monthSeed]);
   
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -885,7 +1083,7 @@ function BudgetManagement() {
         {/* ── Set Budget Limits button ── */}
         <button
           onClick={handleOpenBudgetSetup}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors shadow-sm shrink-0"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm shrink-0"
         >
           <svg
             className="w-4 h-4"
@@ -929,58 +1127,67 @@ function BudgetManagement() {
             label: "Available Balance",
             value: `${totalAvailable < 0 ? "−" : ""}₱${fmt(Math.abs(totalAvailable))}${totalAvailable < 0 ? " OVER" : ""}`,
             sub: "Allocated − Spent − Committed",
-            color: totalAvailable < 0 ? "text-red-600" : "text-emerald-600",
+            color: totalAvailable < 0 ? "text-red-600" : "text-indigo-600",
           },
         ].map((kpi) => (
           <div
             key={kpi.label}
-            className="rounded-2xl border border-gray-100 bg-white p-4 shadow-[0_4px_16px_rgba(0,0,0,0.04)]"
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
           >
-            <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">
+            <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">
               {kpi.label}
             </p>
             <p className={`text-xl font-bold tabular-nums ${kpi.color}`}>
               {kpi.value}
             </p>
-            <p className="text-[10px] text-gray-400 mt-1">{kpi.sub}</p>
+            <p className="text-[10px] text-slate-500 mt-1">{kpi.sub}</p>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 min-h-[520px]">
-          <EnterpriseCalendar requests={calendarRequests} />
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
+        <div className="xl:col-span-2 h-[720px]">
+          <EnterpriseCalendar
+            requests={calendarRequests}
+            allocatedDates={allocatedDateKeys}
+            depletedDates={depletedDateKeys}
+          />
         </div>
-        <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm border-b-4 border-b-emerald-600/20 h-fit">
-          <div className="mb-4">
-            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">
-              Budget Guard Preview
-            </p>
-            <h3 className="text-lg font-black text-emerald-950 mt-1">
-              Revenue-linked Safety Cap
-            </h3>
-          </div>
-          <div className="space-y-3">
-            <div className="rounded-2xl bg-emerald-50 p-3 border border-emerald-100">
-              <p className="text-[10px] font-bold text-emerald-500 uppercase">Current Monthly Revenue</p>
-              <p className="text-xl font-black text-emerald-700 tabular-nums">₱{fmt(metrics?.monthlyRevenue)}</p>
-              <p className="text-[11px] text-emerald-600 mt-1">Allowed budget max (80%): ₱{fmt(num(metrics?.monthlyRevenue) * 0.8)}</p>
-            </div>
-            <div className="rounded-2xl bg-emerald-50 p-3 border border-emerald-100">
-              <p className="text-[10px] font-bold text-emerald-500 uppercase">Current Year Revenue</p>
-              <p className="text-xl font-black text-emerald-700 tabular-nums">₱{fmt(metrics?.yearlyRevenue)}</p>
-              <p className="text-[11px] text-emerald-600 mt-1">Allowed yearly max (80%): ₱{fmt(num(metrics?.yearlyRevenue) * 0.8)}</p>
-            </div>
-            <div className="rounded-2xl bg-gray-50 p-3 border border-gray-100">
-              <p className="text-[10px] font-bold text-gray-500 uppercase">Current Available Budget</p>
-              <p className={`text-xl font-black tabular-nums ${totalAvailable < 0 ? "text-red-600" : "text-emerald-700"}`}>
-                {totalAvailable < 0 ? "−" : ""}₱{fmt(Math.abs(totalAvailable))}
+        <div className="h-[720px] flex flex-col gap-6">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col flex-1 min-h-0">
+            <div className="mb-4">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                Budget Guard Preview
               </p>
+              <h3 className="text-lg font-black text-slate-900 mt-1">
+                Revenue-linked Safety Cap
+              </h3>
             </div>
-            <div className="rounded-2xl bg-gray-50 p-3 border border-gray-100">
-              <p className="text-[10px] font-bold text-gray-500 uppercase">Live Draft Total</p>
-              <p className="text-xl font-black text-gray-900 tabular-nums">₱{fmt(draftTotal)}</p>
+            <div className="space-y-3 overflow-auto pr-1">
+              <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200">
+                <p className="text-[10px] font-bold text-emerald-500 uppercase">Current Monthly Revenue</p>
+                <p className="text-xl font-black text-slate-900 tabular-nums">₱{fmt(metrics?.monthlyRevenue)}</p>
+                <p className="text-[11px] text-emerald-600 mt-1">Allowed budget max (80%): ₱{fmt(num(metrics?.monthlyRevenue) * 0.8)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200">
+                <p className="text-[10px] font-bold text-emerald-500 uppercase">Current Year Revenue</p>
+                <p className="text-xl font-black text-slate-900 tabular-nums">₱{fmt(metrics?.yearlyRevenue)}</p>
+                <p className="text-[11px] text-emerald-600 mt-1">Allowed yearly max (80%): ₱{fmt(num(metrics?.yearlyRevenue) * 0.8)}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Current Available Budget</p>
+                <p className={`text-xl font-black tabular-nums ${totalAvailable < 0 ? "text-red-600" : "text-slate-900"}`}>
+                  {totalAvailable < 0 ? "−" : ""}₱{fmt(Math.abs(totalAvailable))}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Live Draft Total</p>
+                <p className="text-xl font-black text-slate-900 tabular-nums">₱{fmt(draftTotal)}</p>
+              </div>
             </div>
+          </div>
+          <div className="flex-1 min-h-0">
+            <YearlyRequestFrequencyGraph data={frequencyData} onOpenBreakdown={() => setFreqModalOpen(true)} />
           </div>
         </div>
       </div>
@@ -1591,6 +1798,112 @@ function BudgetManagement() {
                     )}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {freqModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            onClick={() => setFreqModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.96, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+            >
+              <div className="flex items-start justify-between p-6 pb-4 border-b border-gray-100">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900">
+                    Department Request Breakdown
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Total request frequency per department (last 12 months).
+                  </p>
+                </div>
+                <button
+                  onClick={() => setFreqModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 ml-4 mt-0.5"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 p-6">
+                {departmentFrequency.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <p className="text-sm text-gray-400">No requests found.</p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-emerald-50 border-b border-emerald-100">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                            Department
+                          </th>
+                          <th className="px-4 py-3 text-right text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                            Total
+                          </th>
+                          <th className="px-4 py-3 text-right text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                            Operational
+                          </th>
+                          <th className="px-4 py-3 text-right text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                            HR
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {departmentFrequency.map((r) => (
+                          <tr key={r.department} className="hover:bg-emerald-50/30 transition-colors">
+                            <td className="px-4 py-3 font-medium text-gray-900">
+                              {r.department}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums font-semibold text-emerald-700">
+                              {fmt(r.total)}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                              {fmt(r.operational)}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                              {fmt(r.hr)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 pt-4 border-t border-gray-100 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setFreqModalOpen(false)}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors"
+                >
+                  Close
+                </button>
               </div>
             </motion.div>
           </motion.div>

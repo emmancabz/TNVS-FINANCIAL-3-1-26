@@ -1,244 +1,573 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FileText, TrendingUp, TrendingDown, X, Info, Calendar, Hash, CreditCard } from 'lucide-react'
-import { fetchGeneralLedgerEntries } from '../services/generalLedgerService'
+import {
+  Calendar,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from 'lucide-react'
+import { supabase } from '../../database/supabase'
+import { fetchUnifiedLedgerEntries } from '../services/generalLedgerService'
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+const pad2 = (n) => String(n).padStart(2, '0')
+
+const getPhilippinesNow = () => new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' }))
+
+const toPhilippinesDate = (date) => date.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+
+const parsePhilippinesDate = (yyyyMmDd) => new Date(`${yyyyMmDd}T00:00:00+08:00`)
+
+const startOfPhilippinesDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+const addDays = (date, days) => new Date(date.getTime() + days * DAY_MS)
+
+const maskName = (fullName) => {
+  const parts = String(fullName || '')
+    .split(' ')
+    .map((p) => p.trim())
+    .filter(Boolean)
+  if (parts.length === 0) return '—'
+  const first = parts[0]?.[0] ? `${parts[0][0].toUpperCase()}*` : '—'
+  const last =
+    parts.length > 1 && parts[parts.length - 1]?.[0]
+      ? `${parts[parts.length - 1][0].toUpperCase()}*`
+      : ''
+  return last ? `${first} ${last}` : first
+}
+
+const fmtCurrency = (value) =>
+  `₱${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+
+const isValidDateStr = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))
 
 function GeneralLedger() {
+  const now = getPhilippinesNow()
+  const currentYear = now.getFullYear()
+  const currentMonthIndex = now.getMonth()
+  const todayStr = toPhilippinesDate(now)
+
+  const [periodMode, setPeriodMode] = useState('year')
+  const [periodYear, setPeriodYear] = useState(currentYear)
+  const [periodMonthIndex, setPeriodMonthIndex] = useState(currentMonthIndex)
+  const [periodOpen, setPeriodOpen] = useState(false)
+
+  const [fromDate, setFromDate] = useState(() => `${currentYear}-01-01`)
+  const [toDate, setToDate] = useState(() => todayStr)
+  const [txnFilter, setTxnFilter] = useState('all')
+
   const [entries, setEntries] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [selectedEntry, setSelectedEntry] = useState(null)
+
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedEntry, setSelectedEntry] = useState(null) // State para sa Modal
   const rowsPerPage = 10
 
-  useEffect(() => {
-    const load = async () => {
-      setIsLoading(true)
-      setError('')
-      try {
-        const data = await fetchGeneralLedgerEntries()
-        setEntries(data)
-      } catch (err) {
-        console.error('Failed to load general ledger entries', err)
-        setError('Failed to load general ledger entries')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    load()
-  }, [])
+  const periodRange = useMemo(() => {
+    const safeYear = Math.min(Number(periodYear || currentYear), currentYear)
+    const safeMonth =
+      safeYear === currentYear ? Math.min(Number(periodMonthIndex || 0), currentMonthIndex) : Number(periodMonthIndex || 0)
 
-  const totalDebit = entries.reduce((sum, row) => sum + (row.debit || 0), 0)
-  const totalCredit = entries.reduce((sum, row) => sum + (row.credit || 0), 0)
-  const netBalance = totalDebit - totalCredit
-  const isBalanced = totalDebit === totalCredit
-  const totalPages = Math.max(1, Math.ceil(entries.length / rowsPerPage))
+    if (periodMode === 'month') {
+      const monthStart = new Date(`${safeYear}-${pad2(safeMonth + 1)}-01T00:00:00+08:00`)
+      const nextMonthStart =
+        safeYear === currentYear && safeMonth === currentMonthIndex
+          ? addDays(startOfPhilippinesDay(now), 1)
+          : new Date(`${safeYear}-${pad2(safeMonth + 2)}-01T00:00:00+08:00`)
+      return { start: monthStart, endExclusive: nextMonthStart, label: `${monthStart.toLocaleString('en-PH', { month: 'long' })} ${safeYear}` }
+    }
+
+    const yearStart = new Date(`${safeYear}-01-01T00:00:00+08:00`)
+    const yearEndExclusive =
+      safeYear === currentYear ? addDays(startOfPhilippinesDay(now), 1) : new Date(`${safeYear + 1}-01-01T00:00:00+08:00`)
+    return { start: yearStart, endExclusive: yearEndExclusive, label: String(safeYear) }
+  }, [periodMode, periodYear, periodMonthIndex, currentYear, currentMonthIndex, now])
+
+  const listRange = useMemo(() => {
+    const safeFrom = isValidDateStr(fromDate) ? parsePhilippinesDate(fromDate) : periodRange.start
+    const safeTo = isValidDateStr(toDate) ? parsePhilippinesDate(toDate) : addDays(periodRange.endExclusive, -1)
+    const from = startOfPhilippinesDay(safeFrom)
+    const toDay = startOfPhilippinesDay(safeTo)
+    const maxTo = startOfPhilippinesDay(parsePhilippinesDate(todayStr))
+    const clampedTo = toDay.getTime() > maxTo.getTime() ? maxTo : toDay
+    const clampedFrom = from.getTime() > clampedTo.getTime() ? clampedTo : from
+    return { start: clampedFrom, endExclusive: addDays(clampedTo, 1) }
+  }, [fromDate, toDate, periodRange, todayStr])
+
+  const queryRange = useMemo(() => {
+    const start = new Date(Math.min(periodRange.start.getTime(), listRange.start.getTime()))
+    const endExclusive = new Date(Math.max(periodRange.endExclusive.getTime(), listRange.endExclusive.getTime()))
+    return { startISO: start.toISOString(), endISO: endExclusive.toISOString() }
+  }, [periodRange, listRange])
+
+  const load = async () => {
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await fetchUnifiedLedgerEntries({ fromISO: queryRange.startISO, toISO: queryRange.endISO })
+      setEntries(data || [])
+    } catch (err) {
+      setError(err?.message || String(err))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+  }, [queryRange.startISO, queryRange.endISO])
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('gl-live')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'core1_boundary_payments' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_disbursement' }, () => load())
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [queryRange.startISO, queryRange.endISO])
+
+  const summaryEntries = useMemo(() => {
+    const start = periodRange.start.getTime()
+    const end = periodRange.endExclusive.getTime()
+    return (entries || []).filter((e) => {
+      const t = new Date(e?.transaction_date).getTime()
+      return Number.isFinite(t) && t >= start && t < end
+    })
+  }, [entries, periodRange])
+
+  const revenue = useMemo(() => summaryEntries.reduce((s, e) => s + Number(e?.debit || 0), 0), [summaryEntries])
+  const expenses = useMemo(() => summaryEntries.reduce((s, e) => s + Number(e?.credit || 0), 0), [summaryEntries])
+  const netProfit = revenue - expenses
+
+  const filtered = useMemo(() => {
+    const start = listRange.start.getTime()
+    const end = listRange.endExclusive.getTime()
+    return (entries || []).filter((e) => {
+      const t = new Date(e?.transaction_date).getTime()
+      if (!Number.isFinite(t) || t < start || t >= end) return false
+      if (txnFilter === 'debit') return Number(e?.debit || 0) > 0
+      if (txnFilter === 'credit') return Number(e?.credit || 0) > 0
+      return true
+    })
+  }, [entries, listRange, txnFilter])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage))
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [entries.length])
+  }, [filtered.length])
 
+  const pageSafe = Math.min(currentPage, totalPages)
   const paginatedRows = useMemo(() => {
-    const start = (currentPage - 1) * rowsPerPage
-    return entries.slice(start, start + rowsPerPage)
-  }, [entries, currentPage, rowsPerPage])
+    const start = (pageSafe - 1) * rowsPerPage
+    return filtered.slice(start, start + rowsPerPage)
+  }, [filtered, pageSafe])
 
-  const formatDate = (value) => {
+  const monthOptions = useMemo(
+    () =>
+      [...Array(12)].map((_, i) => ({
+        value: i,
+        label: new Date(`2026-${pad2(i + 1)}-01T00:00:00+08:00`).toLocaleString('en-PH', { month: 'long' }),
+        disabled: periodYear === currentYear && i > currentMonthIndex,
+      })),
+    [periodYear, currentYear, currentMonthIndex]
+  )
+
+  const yearOptions = useMemo(() => {
+    const minYear = Math.max(2020, currentYear - 6)
+    return [...Array(currentYear - minYear + 1)].map((_, i) => currentYear - i)
+  }, [currentYear])
+
+  const formatDateTime = (value) => {
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return '—'
-    return date.toLocaleDateString('en-PH', { month: 'short', day: '2-digit', year: 'numeric' })
+    return date.toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      month: 'short',
+      day: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-      className="p-6 md:p-8 lg:p-10"
-    >
-      {/* Header Section */}
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-semibold text-gray-900 mb-2 tracking-tight">General Ledger</h1>
-        <p className="text-gray-500 text-sm">Auto Double-Entry Journaling · Automated Profit & Loss statements</p>
-      </div>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 lg:p-10">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-emerald-900 mb-1 tracking-tight">General Ledger</h1>
+            <p className="text-emerald-700 text-sm">Master records · Live revenue and expense history</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPeriodOpen(true)}
+            className="px-4 py-2 rounded-2xl border border-emerald-200 bg-white text-emerald-800 text-sm font-semibold hover:bg-emerald-50 flex items-center gap-2"
+          >
+            Period: {periodRange.label}
+            <ChevronDown className="w-4 h-4" />
+          </button>
+        </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)] flex items-center gap-3">
-          <TrendingUp className="w-8 h-8 text-[#2ecc71]" />
-          <div>
-            <p className="text-xs font-medium text-gray-500">Revenue</p>
-            <p className="text-xl font-semibold text-gray-900">₱{totalDebit.toLocaleString()}</p>
-          </div>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.05 }} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)] flex items-center gap-3">
-          <TrendingDown className="w-8 h-8 text-amber-500" />
-          <div>
-            <p className="text-xs font-medium text-gray-500">Expenses</p>
-            <p className="text-xl font-semibold text-gray-900">₱{totalCredit.toLocaleString()}</p>
-          </div>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }} className="rounded-2xl border border-[#2ecc71]/30 bg-[#2ecc71]/5 p-5 flex items-center gap-3">
-          <FileText className="w-8 h-8 text-[#2ecc71]" />
-          <div>
-            <p className="text-xs font-medium text-gray-500">Net Profit</p>
-            <p className="text-xl font-bold text-[#166534]">₱{netBalance.toLocaleString()}</p>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Table Section */}
-      <div className="grid grid-cols-1 gap-6">
-        <div className="space-y-4">
-          <motion.div layout className="rounded-2xl border border-gray-100 bg-white shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50/80">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Debit</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Credit</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Account Code</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Reference ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Description</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {paginatedRows.map((row) => (
-                    <motion.tr
-                      key={row.id}
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      onClick={() => setSelectedEntry(row)} // Click event para sa modal
-                      className="hover:bg-gray-50/80 transition-colors cursor-pointer group"
-                    >
-                      <td className="px-4 py-3 font-medium text-[#166534]">₱{Number(row.debit || 0).toLocaleString()}</td>
-                      <td className="px-4 py-3 font-medium text-amber-700">₱{Number(row.credit || 0).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-gray-600 font-mono text-[11px]">{row.account_code || '—'}</td>
-                      <td className="px-4 py-3 text-gray-600 truncate max-w-[120px]">{row.reference_id || '—'}</td>
-                      <td className="px-4 py-3 text-gray-600">{row.description}</td>
-                      <td className="px-4 py-3 text-gray-500">{formatDate(row.transaction_date)}</td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                  <tr>
-                    <td className="px-4 py-3 font-bold text-gray-900 text-xs">Debit: ₱{totalDebit.toLocaleString()}</td>
-                    <td className="px-4 py-3 font-bold text-gray-900 text-xs">Credit: ₱{totalCredit.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-gray-500 italic text-[11px]" colSpan={2}>
-                      Status: {isBalanced ? 'Balanced' : 'Unbalanced'}
-                    </td>
-                    <td className="px-4 py-3" colSpan={2} />
-                  </tr>
-                </tfoot>
-              </table>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="rounded-2xl border border-emerald-100 bg-white shadow-[0_6px_18px_rgba(16,185,129,0.12)] p-5 flex items-center gap-3">
+            <TrendingUp className="w-8 h-8 text-emerald-600" />
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Revenue</p>
+              <p className="text-xl font-black text-emerald-800 tabular-nums">{fmtCurrency(revenue)}</p>
             </div>
-          </motion.div>
-          {/* Pagination Controls */}
-          <div className="flex items-center justify-between px-4 py-3 text-xs text-gray-500">
-            <span className="uppercase tracking-widest text-[10px] font-semibold">Page {currentPage} of {totalPages}</span>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 rounded-xl border border-gray-200 font-semibold disabled:opacity-40 hover:bg-gray-50 transition-all">Previous</button>
-              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 rounded-xl border border-gray-200 font-semibold disabled:opacity-40 hover:bg-gray-50 transition-all">Next</button>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-white shadow-[0_6px_18px_rgba(16,185,129,0.12)] p-5 flex items-center gap-3">
+            <TrendingDown className="w-8 h-8 text-emerald-600" />
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Expenses</p>
+              <p className="text-xl font-black text-emerald-800 tabular-nums">{fmtCurrency(expenses)}</p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 shadow-[0_6px_18px_rgba(16,185,129,0.12)] p-5 flex items-center gap-3">
+            <FileText className="w-8 h-8 text-emerald-700" />
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Net Profit</p>
+              <p className="text-xl font-black text-emerald-900 tabular-nums">{fmtCurrency(netProfit)}</p>
             </div>
           </div>
         </div>
+
+        <div className="rounded-2xl border border-emerald-100 bg-white shadow-[0_8px_24px_rgba(16,185,129,0.08)] p-4 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50/40">
+              <span className="text-xs font-semibold text-emerald-700">From</span>
+              <input
+                type="date"
+                value={fromDate}
+                max={todayStr}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="bg-transparent text-sm text-emerald-900 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50/40">
+              <span className="text-xs font-semibold text-emerald-700">To</span>
+              <input
+                type="date"
+                value={toDate}
+                max={todayStr}
+                onChange={(e) => setToDate(e.target.value)}
+                className="bg-transparent text-sm text-emerald-900 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto">
+              {[
+                { key: 'all', label: 'All Transactions' },
+                { key: 'debit', label: 'Debit Only' },
+                { key: 'credit', label: 'Credit Only' },
+              ].map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTxnFilter(t.key)}
+                  className={`px-3 py-2 rounded-xl text-xs font-semibold border transition ${
+                    txnFilter === t.key
+                      ? 'bg-emerald-700 text-white border-emerald-700'
+                      : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-2 text-xs text-emerald-500">
+            Showing <span className="font-semibold text-emerald-700">{filtered.length}</span> transaction(s)
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-100 bg-white shadow-[0_8px_24px_rgba(16,185,129,0.08)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-emerald-50 border-b border-emerald-100">
+                <tr>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Type</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Counterparty</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Description</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Account</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Reference</th>
+                  <th className="px-5 py-4 text-right text-xs font-bold text-emerald-700 uppercase tracking-wider">Amount</th>
+                  <th className="px-5 py-4 text-right text-xs font-bold text-emerald-700 uppercase tracking-wider">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-emerald-100">
+                {isLoading && (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-12 text-center text-emerald-500">
+                      Loading…
+                    </td>
+                  </tr>
+                )}
+                {!isLoading && error && (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-12 text-center text-red-600">
+                      {error}
+                    </td>
+                  </tr>
+                )}
+                {!isLoading && !error && filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-12 text-center text-emerald-700 font-semibold">
+                      No transactions found for this filter.
+                    </td>
+                  </tr>
+                )}
+                {!isLoading &&
+                  !error &&
+                  paginatedRows.map((row) => {
+                    const isDebit = Number(row?.debit || 0) > 0
+                    const amount = Number(row?.amount || 0)
+                    return (
+                      <tr
+                        key={row?.id}
+                        className="hover:bg-emerald-50/40 transition-colors cursor-pointer"
+                        onClick={() => setSelectedEntry(row)}
+                      >
+                        <td className="px-5 py-4">
+                          <span
+                            className={`text-xs font-bold ${
+                              isDebit ? 'text-emerald-700' : 'text-rose-700'
+                            }`}
+                          >
+                            {isDebit ? 'DEBIT' : 'CREDIT'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 font-semibold text-emerald-900">{maskName(row?.counterparty_name)}</td>
+                        <td className="px-5 py-4 text-emerald-900/80">{row?.description || '—'}</td>
+                        <td className="px-5 py-4 text-emerald-700 font-mono text-[11px]">{row?.account_code || '—'}</td>
+                        <td className="px-5 py-4 text-emerald-700 font-mono text-[11px]">{row?.reference_id || '—'}</td>
+                        <td
+                          className={`px-5 py-4 text-right font-black tabular-nums ${
+                            isDebit ? 'text-emerald-700' : 'text-rose-700'
+                          }`}
+                        >
+                          {isDebit ? `+${fmtCurrency(amount)}` : `-${fmtCurrency(amount)}`}
+                        </td>
+                        <td className="px-5 py-4 text-right text-emerald-700">{formatDateTime(row?.transaction_date)}</td>
+                      </tr>
+                    )
+                  })}
+              </tbody>
+            </table>
+          </div>
+
+          {!isLoading && !error && filtered.length > 0 && (
+            <div className="px-5 py-4 border-t border-emerald-100 flex items-center justify-between">
+              <p className="text-xs text-emerald-700">
+                Page <span className="font-semibold">{pageSafe}</span> of{' '}
+                <span className="font-semibold">{totalPages}</span>
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={pageSafe === 1}
+                  className="px-3 py-2 rounded-xl border border-emerald-200 bg-white text-emerald-700 text-xs font-semibold hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={pageSafe === totalPages}
+                  className="px-3 py-2 rounded-xl border border-emerald-200 bg-white text-emerald-700 text-xs font-semibold hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  Next <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* --- DETAILED ENTRY MODAL (Same style as AP) --- */}
       <AnimatePresence>
-        {selectedEntry && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedEntry(null)}
-              className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm"
-            />
-            
-            {/* Modal Content */}
+        {periodOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            onClick={() => setPeriodOpen(false)}
+          >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"
+              initial={{ scale: 0.98, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.98, y: 10 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl border border-emerald-100 w-full max-w-md overflow-hidden"
             >
-              {/* Dark Header Section */}
-              <div className="bg-[#1e293b] p-6 text-white">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-[#2ecc71] px-2.5 py-0.5 text-[10px] font-bold uppercase text-white">Posted</span>
-                    <button onClick={() => setSelectedEntry(null)} className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-                <p className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">GL REFERENCE</p>
-                <h2 className="text-lg font-mono font-semibold break-all">{selectedEntry.reference_id}</h2>
+              <div className="px-5 py-4 bg-emerald-700 text-white flex items-center justify-between">
+                <div className="text-sm font-semibold">Select Period</div>
+                <button type="button" onClick={() => setPeriodOpen(false)} className="p-1 rounded-lg hover:bg-white/10">
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-
-              {/* Body Content */}
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-2xl border border-gray-50 bg-gray-50/50 p-4">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Account Code</p>
-                    <div className="flex items-center gap-2 font-semibold text-gray-700">
-                      <Hash className="w-4 h-4 text-gray-400" />
-                      {selectedEntry.account_code}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-gray-50 bg-gray-50/50 p-4">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Date Created</p>
-                    <div className="flex items-center gap-2 font-semibold text-gray-700">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      {formatDate(selectedEntry.transaction_date)}
-                    </div>
-                  </div>
+              <div className="p-5 space-y-4">
+                <div className="flex gap-2">
+                  {[
+                    { key: 'year', label: 'Current / Year' },
+                    { key: 'month', label: 'Specific Month' },
+                  ].map((m) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => setPeriodMode(m.key)}
+                      className={`flex-1 px-3 py-2 rounded-xl text-xs font-semibold border ${
+                        periodMode === m.key
+                          ? 'bg-emerald-700 text-white border-emerald-700'
+                          : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
                 </div>
 
-                <div className="rounded-2xl border border-gray-50 bg-gray-50/50 p-4">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Description</p>
-                  <p className="text-sm text-gray-600 leading-relaxed">{selectedEntry.description}</p>
+                <div>
+                  <label className="block text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">
+                    Year
+                  </label>
+                  <select
+                    value={periodYear}
+                    onChange={(e) => setPeriodYear(Math.min(Number(e.target.value), currentYear))}
+                    className="w-full px-3 py-2 rounded-xl border border-emerald-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  >
+                    {yearOptions.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* Amount Section (Big Box) */}
-                <div className="rounded-2xl bg-[#f0fdf4] border border-[#2ecc71]/20 p-5">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-[10px] font-bold text-[#166534] uppercase">Ledger Impact</p>
-                      <div className="flex gap-4 mt-1">
-                        <div>
-                          <p className="text-[9px] text-gray-500 uppercase font-semibold">Debit</p>
-                          <p className="text-xl font-bold text-gray-900">₱{Number(selectedEntry.debit || 0).toLocaleString()}</p>
-                        </div>
-                        <div className="h-10 w-px bg-gray-200" />
-                        <div>
-                          <p className="text-[9px] text-gray-500 uppercase font-semibold">Credit</p>
-                          <p className="text-xl font-bold text-gray-900">₱{Number(selectedEntry.credit || 0).toLocaleString()}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="rounded-full bg-white p-2.5 shadow-sm">
-                      <CreditCard className="w-6 h-6 text-[#2ecc71]" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* System Info Footnote */}
-                <div className="bg-blue-50/50 rounded-2xl p-4 flex gap-3 items-start border border-blue-100">
-                  <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                {periodMode === 'month' && (
                   <div>
-                    <p className="text-[10px] font-bold text-blue-800 uppercase">System Note</p>
-                    <p className="text-[11px] text-blue-600 italic">This entry was automatically posted by the double-entry journaling service. Modifications require financial admin clearance.</p>
+                    <label className="block text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">
+                      Month
+                    </label>
+                    <select
+                      value={periodMonthIndex}
+                      onChange={(e) => {
+                        const next = Number(e.target.value)
+                        const safe = periodYear === currentYear ? Math.min(next, currentMonthIndex) : next
+                        setPeriodMonthIndex(safe)
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-emerald-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                    >
+                      {monthOptions.map((m) => (
+                        <option key={m.value} value={m.value} disabled={m.disabled}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setPeriodOpen(false)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-emerald-200 bg-white text-emerald-700 text-sm font-semibold hover:bg-emerald-50"
+                  >
+                    Done
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const safeYear = Math.min(Number(periodYear || currentYear), currentYear)
+                      const safeMonth =
+                        safeYear === currentYear
+                          ? Math.min(Number(periodMonthIndex || 0), currentMonthIndex)
+                          : Number(periodMonthIndex || 0)
+                      const startStr =
+                        periodMode === 'month'
+                          ? `${safeYear}-${pad2(safeMonth + 1)}-01`
+                          : `${safeYear}-01-01`
+                      let endStr = todayStr
+                      if (periodMode === 'year' && safeYear !== currentYear) {
+                        endStr = `${safeYear}-12-31`
+                      }
+                      if (periodMode === 'month' && !(safeYear === currentYear && safeMonth === currentMonthIndex)) {
+                        const nextMonthStart = new Date(`${safeYear}-${pad2(safeMonth + 2)}-01T00:00:00+08:00`)
+                        endStr = toPhilippinesDate(new Date(nextMonthStart.getTime() - DAY_MS))
+                      }
+                      setFromDate(startStr)
+                      setToDate(endStr)
+                      setPeriodOpen(false)
+                    }}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-700 text-white text-sm font-semibold hover:bg-emerald-800"
+                  >
+                    Apply to Filters
+                  </button>
                 </div>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedEntry && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+            onClick={() => setSelectedEntry(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.98, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.98, y: 10 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl border border-emerald-100 w-full max-w-lg overflow-hidden"
+            >
+              <div className="px-5 py-4 bg-emerald-700 text-white flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-100">Transaction</p>
+                  <p className="text-base font-semibold">{selectedEntry?.type}</p>
+                </div>
+                <button type="button" onClick={() => setSelectedEntry(null)} className="p-1 rounded-lg hover:bg-white/10">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-3">
+                {[
+                  { label: 'Counterparty', value: maskName(selectedEntry?.counterparty_name) },
+                  { label: 'Reference', value: selectedEntry?.reference_id || '—' },
+                  { label: 'Account Code', value: selectedEntry?.account_code || '—' },
+                  { label: 'Amount', value: fmtCurrency(selectedEntry?.amount || 0) },
+                  { label: 'Date', value: formatDateTime(selectedEntry?.transaction_date) },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center justify-between gap-3">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">{item.label}</div>
+                    <div className="text-sm font-semibold text-emerald-900 text-right">{item.value}</div>
+                  </div>
+                ))}
+                <div className="pt-3 border-t border-emerald-100">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 mb-1">Description</div>
+                  <div className="text-sm text-emerald-900/80 whitespace-pre-wrap">{selectedEntry?.description || '—'}</div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </motion.div>

@@ -4,7 +4,6 @@ import {
   Package,
   Wrench,
   Users,
-  Wallet,
   Search,
   X,
   AlertTriangle,
@@ -33,23 +32,22 @@ const SOURCE_MODULES = {
     icon: Users,
     color: "bg-violet-100 text-violet-700",
   },
-  "driver-wallet": {
-    label: "Driver Withdrawal",
-    icon: Wallet,
-    color: "bg-emerald-100 text-emerald-700",
-  },
 };
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
   Pending: { color: "bg-amber-100 text-amber-700", dot: "bg-amber-500" },
   "Manager Approved": {
-    color: "bg-blue-100 text-blue-700",
-    dot: "bg-blue-500",
+    color: "bg-emerald-100 text-emerald-700",
+    dot: "bg-emerald-500",
+  },
+  Approved: {
+    color: "bg-emerald-100 text-emerald-700",
+    dot: "bg-emerald-500",
   },
   "Posted to GL": {
-    color: "bg-indigo-100 text-indigo-700",
-    dot: "bg-indigo-500",
+    color: "bg-slate-100 text-slate-700",
+    dot: "bg-slate-500",
   },
   Paid: { color: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
   Rejected: { color: "bg-red-100 text-red-700", dot: "bg-red-500" },
@@ -166,7 +164,6 @@ function DetailModal({
   const src =
     SOURCE_MODULES[row.category?.toLowerCase()] || SOURCE_MODULES[row.category];
   const Icon = src?.icon;
-  const isDriverWithdrawal = row.category?.toLowerCase() === "driver-wallet";
 
   return (
     <motion.div
@@ -206,23 +203,6 @@ function DetailModal({
         </div>
 
         <div className="p-6 space-y-4">
-          {/* Driver withdrawal info banner */}
-          {isDriverWithdrawal && row.payoutRequestId && (
-            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
-              <Wallet className="w-4 h-4 text-emerald-600 shrink-0" />
-              <div className="text-xs">
-                <span className="font-bold text-emerald-700">
-                  Driver Payout Request
-                </span>
-                <span className="text-emerald-600 ml-1">
-                  · Payout Req #{row.payoutRequestId}
-                  {row.payoutMethod && ` · ${row.payoutMethod}`}
-                  {row.payoutAccount && ` · ${row.payoutAccount}`}
-                </span>
-              </div>
-            </div>
-          )}
-
           <div className="grid grid-cols-2 gap-3">
             {[
               { label: "Vendor / Payee", value: row.vendor },
@@ -263,7 +243,7 @@ function DetailModal({
               row.status !== "Paid" &&
               row.status !== "Rejected"
                 ? "bg-red-50 border-red-200"
-                : "bg-emerald-50 border-emerald-100"
+                : "bg-slate-50 border-slate-200"
             }`}
           >
             <div>
@@ -273,11 +253,6 @@ function DetailModal({
               <p className="text-2xl font-bold text-gray-900 tabular-nums">
                 {fmt(row.amount)}
               </p>
-              {isDriverWithdrawal && row.fee > 0 && (
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Fee: {fmt(row.fee)} · Net: {fmt(row.netAmount)}
-                </p>
-              )}
             </div>
             {row.agingBucket === "Overdue" &&
               row.status !== "Paid" &&
@@ -291,8 +266,8 @@ function DetailModal({
 
           {/* Approval info */}
           {row.approved_by && (
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700 space-y-0.5">
-              <p className="font-bold uppercase tracking-wider text-[10px] text-blue-500">
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-xs text-indigo-700 space-y-0.5">
+              <p className="font-bold uppercase tracking-wider text-[10px] text-indigo-500">
                 Approval Info
               </p>
               <p>
@@ -321,7 +296,7 @@ function DetailModal({
                     type: "CR",
                     account: "2000-AP",
                     label: "Accounts Payable Liability",
-                    color: "text-emerald-700",
+                    color: "text-indigo-700",
                   },
                 ].map((line) => (
                   <div
@@ -350,8 +325,7 @@ function DetailModal({
                 ))}
               </div>
               <p className="text-[10px] text-indigo-400 mt-2 italic">
-                Posting will also auto-create a Disbursement Voucher
-                {isDriverWithdrawal ? " linked to this payout request." : "."}
+                Posting will also auto-create a Disbursement Voucher.
               </p>
             </div>
           )}
@@ -364,7 +338,7 @@ function DetailModal({
                   <button
                     onClick={() => onApprove(row)}
                     disabled={actionLoading}
-                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
+                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
                   >
                     <CheckCircle2 className="w-4 h-4" /> Check Budget & Approve
                   </button>
@@ -411,6 +385,10 @@ function AccountsPayable() {
   const [budgetWarning, setBudgetWarning] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
   const [detailRow, setDetailRow] = useState(null);
+  const approvedStatuses = useMemo(
+    () => new Set(["Approved", "Manager Approved", "Posted to GL"]),
+    [],
+  );
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -434,65 +412,31 @@ function AccountsPayable() {
           .order("created_at", { ascending: false });
         if (apErr) throw apErr;
 
+        const apIds = (apData || [])
+          .map((r) => r?.id)
+          .filter(Boolean);
+        let releasedMap = new Set();
+        if (apIds.length > 0) {
+          const { data: disbursements, error: disbErr } = await supabase
+            .from("fin_disbursement")
+            .select("ap_id, status")
+            .in("ap_id", apIds)
+            .eq("status", "RELEASED");
+          if (disbErr) throw disbErr;
+          (disbursements || []).forEach((d) => {
+            if (d?.ap_id) releasedMap.add(d.ap_id);
+          });
+        }
+
         const { data: budgetData, error: budgetErr } = await supabase
           .from("fin_budget_management")
           .select("id, category, limit_amount, actual_spend");
         if (budgetErr) throw budgetErr;
 
-        const driverApRows = (apData || []).filter(
-          (r) =>
-            r.category?.toLowerCase() === "driver-wallet" ||
-            r.category?.toLowerCase() === "driver payout",
-        );
-        const driverApIds = driverApRows.map((r) => r.id);
-        const driverRefNos = driverApRows.map((r) => r.ref_no).filter(Boolean);
-
-        let payoutMap = {};
-
-        if (driverApIds.length > 0) {
-          const { data: payoutsByApId } = await supabase
-            .from("core1_payout_requests")
-            .select(
-              "id, ap_id, amount, fee, net_amount, method, account_number, reference_no, driver_id",
-            )
-            .in("ap_id", driverApIds);
-          (payoutsByApId || []).forEach((p) => {
-            if (p.ap_id) payoutMap[p.ap_id] = p;
-          });
-
-          if (driverRefNos.length > 0) {
-            const missingApIds = driverApRows
-              .filter((r) => !payoutMap[r.id])
-              .map((r) => {
-                const match = r.ref_no?.match(/(\d+)$/);
-                return match
-                  ? { apId: r.id, payoutId: parseInt(match[1], 10) }
-                  : null;
-              })
-              .filter(Boolean);
-
-            if (missingApIds.length > 0) {
-              const { data: payoutsByPid } = await supabase
-                .from("core1_payout_requests")
-                .select(
-                  "id, ap_id, amount, fee, net_amount, method, account_number, reference_no, driver_id",
-                )
-                .in(
-                  "id",
-                  missingApIds.map((x) => x.payoutId),
-                );
-              (payoutsByPid || []).forEach((p) => {
-                const mapping = missingApIds.find((x) => x.payoutId === p.id);
-                if (mapping) payoutMap[mapping.apId] = p;
-              });
-            }
-          }
-        }
-
         setRows(
           (apData || []).map((item) => ({
             ...item,
-            _payout: payoutMap[item.id] ?? null,
+            _released: releasedMap.has(item?.id),
           })),
         );
         setBudgets(Array.isArray(budgetData) ? budgetData : []);
@@ -514,8 +458,11 @@ function AccountsPayable() {
         const isPayroll = String(item.category || "").toLowerCase().includes("payroll");
         const vendorName = item.vendor_name ?? "Unknown";
         const vendor = isPayroll && employeeName ? employeeName : vendorName;
-        const anchor = item.due_date ? new Date(item.due_date) : new Date(item.created_at);
-        const agingDays = Math.floor((today - anchor) / 86400000);
+        const createdAt = item?.created_at ?? null;
+        const createdDate = createdAt ? new Date(createdAt) : null;
+        const createdTime = createdDate?.getTime?.();
+        const safeCreatedTime = Number.isFinite(createdTime) ? createdTime : today.getTime();
+        const agingDays = Math.max(0, Math.floor((today.getTime() - safeCreatedTime) / 86400000));
         return {
           id: item.id,
           ref: item.ref_no,
@@ -530,48 +477,52 @@ function AccountsPayable() {
           approved_at: item.approved_at ?? null,
           agingDays,
           agingBucket: agingDays > 30 ? "Overdue" : "Current",
-          payoutRequestId: item._payout?.id ?? null,
-          payoutMethod: item._payout?.method ?? null,
-          payoutAccount: item._payout?.account_number ?? null,
-          fee: Number(item._payout?.fee ?? 0),
-          netAmount: Number(item._payout?.net_amount ?? item.amount ?? 0),
-          driverId: item._payout?.driver_id ?? null,
+          isReleased: !!item?._released,
         };
       }),
-    [rows],
+    [rows, today],
   );
 
   const kpis = useMemo(() => {
-    const unpaid = mappedRows.filter((r) => r.status !== "Paid" && r.status !== "Rejected");
+    const unpaid = mappedRows.filter(
+      (r) => !r.isReleased && r.status !== "Rejected",
+    );
+    const overdueRows = unpaid.filter((r) => r.agingDays > 30);
+    const currentRows = unpaid.filter((r) => r.agingDays <= 30);
     return {
-      totalUnpaid: unpaid.reduce((a, r) => a + r.amount, 0),
-      current: unpaid.filter((r) => r.agingBucket === "Current").reduce((a, r) => a + r.amount, 0),
-      overdue: unpaid.filter((r) => r.agingBucket === "Overdue").reduce((a, r) => a + r.amount, 0),
-      overdueCount: unpaid.filter((r) => r.agingBucket === "Overdue").length,
+      totalUnpaid: unpaid.reduce((a, r) => a + Number(r?.amount || 0), 0),
+      current: currentRows.reduce((a, r) => a + Number(r?.amount || 0), 0),
+      overdue: overdueRows.reduce((a, r) => a + Number(r?.amount || 0), 0),
+      overdueCount: overdueRows.length,
       pending: mappedRows.filter((r) => r.status === "Pending").length,
-      driverWallet: mappedRows
-        .filter((r) => (r.category || "").toLowerCase() === "driver-wallet" && r.status !== "Paid" && r.status !== "Rejected")
-        .reduce((a, r) => a + r.amount, 0),
     };
   }, [mappedRows]);
 
   const vendorBalances = useMemo(() => {
     const map = new Map();
-    mappedRows.filter((r) => r.status !== "Paid" && r.status !== "Rejected").forEach((r) => {
-      map.set(r.vendor, (map.get(r.vendor) || 0) + r.amount);
-    });
+    mappedRows
+      .filter((r) => !r.isReleased && r.status !== "Rejected")
+      .forEach((r) => {
+        map.set(r.vendor, (map.get(r.vendor) || 0) + Number(r?.amount || 0));
+      });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [mappedRows]);
 
-  const categoryOptions = [...new Set(mappedRows.map((r) => r.category).filter(Boolean))];
-  // Filter out "Paid" from status options since we won't show them here
-  const statusOptions = [...new Set(mappedRows.map((r) => r.status).filter(s => s !== "Paid" && s !== ""))];
+  const approvedRows = useMemo(
+    () => mappedRows.filter((r) => approvedStatuses.has(r.status) && !r.isReleased),
+    [mappedRows, approvedStatuses],
+  );
+  const categoryOptions = [
+    ...new Set(approvedRows.map((r) => r.category).filter(Boolean)),
+  ];
+  const statusOptions = [
+    ...new Set(approvedRows.map((r) => r.status).filter((s) => s)),
+  ];
 
   const filteredRows = useMemo(
     () =>
-      mappedRows.filter((row) => {
-        // Logic: Mawawala dapat ang "Paid" records sa listahan
-        if (row.status === "Paid") return false;
+      approvedRows.filter((row) => {
+        if (row.isReleased) return false;
 
         if (filters.category && row.category !== filters.category) return false;
         if (filters.status && row.status !== filters.status) return false;
@@ -581,7 +532,7 @@ function AccountsPayable() {
         }
         return true;
       }),
-    [mappedRows, filters, search],
+    [approvedRows, filters, search],
   );
 
   // Logic for Paginated Rows
@@ -592,15 +543,12 @@ function AccountsPayable() {
   }, [filteredRows, currentPage]);
 
   const handleApprove = async (row) => {
-    const isDriverWithdrawal = row.category?.toLowerCase() === "driver-wallet";
-    if (!isDriverWithdrawal) {
-      const budgetRow = budgets.find((b) => b.category === row.category);
-      const available = budgetRow ? budgetRow.limit_amount - budgetRow.actual_spend : null;
-      if (available != null && row.amount > available) {
-        setBudgetWarning({ ref: row.ref, amount: row.amount, vendor: row.vendor });
-        setDetailRow(null);
-        return;
-      }
+    const budgetRow = budgets.find((b) => b.category === row.category);
+    const available = budgetRow ? budgetRow.limit_amount - budgetRow.actual_spend : null;
+    if (available != null && row.amount > available) {
+      setBudgetWarning({ ref: row.ref, amount: row.amount, vendor: row.vendor });
+      setDetailRow(null);
+      return;
     }
     setActionLoading(true);
     try {
@@ -635,12 +583,6 @@ function AccountsPayable() {
         description: `${row.description} [Rejected: ${reason}]`,
       }).eq("id", row.id);
       if (upErr) throw upErr;
-      if (row.payoutRequestId) {
-        await supabase.from("core1_payout_requests").update({
-          status: "REJECTED",
-          admin_notes: `Finance rejected AP entry. Reason: ${reason}`,
-        }).eq("id", row.payoutRequestId);
-      }
       setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status: "Rejected" } : r)));
       setRejectTarget(null);
     } catch (err) {
@@ -654,7 +596,6 @@ function AccountsPayable() {
     setActionLoading(true);
     try {
       const now = new Date().toISOString();
-      const isDriverWithdrawal = row.category?.toLowerCase() === "driver-wallet";
       const desc = `AP Posted | ${row.ref} | ${row.vendor} | ${row.category}`;
 
       await supabase.from("fin_general_ledger").insert({ description: desc, debit: row.amount, credit: 0, reference_id: row.id, transaction_date: now, account_code: "5000-EXP" });
@@ -665,8 +606,7 @@ function AccountsPayable() {
         dv_no: dvNo,
         ap_id: row.id,
         status: "Pending Disbursement",
-        payment_method: isDriverWithdrawal ? (row.payoutMethod ?? "E-WALLET") : "Check",
-        ...(isDriverWithdrawal && row.payoutRequestId ? { payout_request_id: row.payoutRequestId } : {}),
+        payment_method: "Check",
       });
 
       await supabase.from("fin_accounts_payable").update({ status: "Posted to GL" }).eq("id", row.id);
@@ -682,8 +622,8 @@ function AccountsPayable() {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="p-6 md:p-8 lg:p-10">
       <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1 tracking-tight">Accounts Payable</h1>
-        <p className="text-gray-500 text-sm">Manages pending payments from Procurement, Asset Maintenance, HR Payroll, and Driver Wallet withdrawals.</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1 tracking-tight">Accounts Payable</h1>
+        <p className="text-slate-600 text-sm">Manages approved payments from Procurement, Asset Maintenance, and HR Payroll.</p>
       </div>
 
       <AnimatePresence>
@@ -695,31 +635,30 @@ function AccountsPayable() {
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "Total Unpaid", value: fmt(kpis.totalUnpaid), color: "border-gray-200", icon: <FileText className="w-4 h-4 text-gray-400" /> },
-          { label: "Current (0–30d)", value: fmt(kpis.current), color: "border-blue-200", icon: <Clock className="w-4 h-4 text-blue-400" /> },
-          { label: "Overdue (31+d)", value: fmt(kpis.overdue), color: kpis.overdueCount > 0 ? "border-red-300" : "border-gray-200", icon: <AlertTriangle className={`w-4 h-4 ${kpis.overdueCount > 0 ? "text-red-500" : "text-gray-400"}`} /> },
+          { label: "Total Unpaid", value: fmt(kpis.totalUnpaid), color: "border-slate-200", icon: <FileText className="w-4 h-4 text-slate-400" /> },
+          { label: `${today.toLocaleString("en-PH", { month: "long" })} Payables`, value: fmt(kpis.current), color: "border-indigo-200", icon: <Clock className="w-4 h-4 text-indigo-500" /> },
+          { label: "Overdue (31+d)", value: fmt(kpis.overdue), color: kpis.overdueCount > 0 ? "border-red-300" : "border-slate-200", icon: <AlertTriangle className={`w-4 h-4 ${kpis.overdueCount > 0 ? "text-red-500" : "text-slate-400"}`} /> },
           { label: "Pending Approval", value: kpis.pending, color: "border-amber-200", icon: <Clock className="w-4 h-4 text-amber-500" /> },
-          { label: "Driver Withdrawals", value: fmt(kpis.driverWallet), color: "border-emerald-200", icon: <Wallet className="w-4 h-4 text-emerald-500" /> },
         ].map((k) => (
           <div key={k.label} className={`bg-white rounded-2xl border ${k.color} p-4 shadow-sm`}>
             <div className="mb-2">{k.icon}</div>
-            <p className="text-lg font-bold text-gray-900 tabular-nums">{k.value}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{k.label}</p>
+            <p className="text-lg font-bold text-slate-900 tabular-nums">{k.value}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{k.label}</p>
           </div>
         ))}
       </div>
 
       {/* Top Unpaid Vendor Balances Section */}
       {vendorBalances.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-6 shadow-sm">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Top Unpaid Vendor Balances</p>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-6 shadow-sm">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Top Unpaid Vendor Balances</p>
           <div className="flex flex-wrap gap-2">
             {vendorBalances.map(([vendor, amount]) => (
-              <div key={vendor} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-                <span className="text-sm font-semibold text-gray-800">{vendor}</span>
-                <span className="text-xs font-bold text-emerald-700">{fmt(amount)}</span>
+              <div key={vendor} className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                <span className="text-sm font-semibold text-slate-800">{vendor}</span>
+                <span className="text-xs font-bold text-indigo-700">{fmt(amount)}</span>
               </div>
             ))}
           </div>
@@ -727,37 +666,37 @@ function AccountsPayable() {
       )}
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl min-w-[220px]">
-          <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          <input className="bg-transparent outline-none placeholder-gray-400 flex-1 text-sm" placeholder="Search vendor, ref, description..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
+        <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl min-w-[220px]">
+          <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <input className="bg-transparent outline-none placeholder-slate-400 flex-1 text-sm" placeholder="Search vendor, ref, description..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
         </div>
-        <select value={filters.category} onChange={(e) => { setFilters((p) => ({ ...p, category: e.target.value })); setCurrentPage(1); }} className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100">
+        <select value={filters.category} onChange={(e) => { setFilters((p) => ({ ...p, category: e.target.value })); setCurrentPage(1); }} className="px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100">
           <option value="">All Categories</option>
           {categoryOptions.map((c) => (<option key={c} value={c}>{SOURCE_MODULES[c]?.label ?? c}</option>))}
         </select>
-        <select value={filters.status} onChange={(e) => { setFilters((p) => ({ ...p, status: e.target.value })); setCurrentPage(1); }} className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-100">
+        <select value={filters.status} onChange={(e) => { setFilters((p) => ({ ...p, status: e.target.value })); setCurrentPage(1); }} className="px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100">
           <option value="">All Statuses</option>
           {statusOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
         </select>
-        <span className="ml-auto text-xs text-gray-400">{filteredRows.length} total records</span>
+        <span className="ml-auto text-xs text-slate-400">{filteredRows.length} total records</span>
       </div>
 
-      <motion.div layout className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden mb-4">
+      <motion.div layout className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden mb-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 {["Ref No.", "Vendor / Payee", "Category", "Description", "Amount", "Due Date", "Aging", "Status"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-200">
               <AnimatePresence>
                 {isLoading ? (
-                  <tr key="loading"><td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">Loading...</td></tr>
+                  <tr key="loading"><td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-400">Loading...</td></tr>
                 ) : paginatedRows.length === 0 ? (
-                  <tr key="empty"><td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">No active liabilities found.</td></tr>
+                  <tr key="empty"><td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-400">No approved payables found.</td></tr>
                 ) : (
                   paginatedRows.map((row, i) => {
                     const src = SOURCE_MODULES[row.category?.toLowerCase()] || SOURCE_MODULES[row.category];
@@ -767,15 +706,15 @@ function AccountsPayable() {
                       <motion.tr
                         key={row.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                         onClick={() => setDetailRow(row)}
-                        className={`cursor-pointer transition-colors ${isOverdueActive ? "bg-red-50/30 hover:bg-red-50" : "hover:bg-gray-50"}`}
+                        className={`cursor-pointer transition-colors ${isOverdueActive ? "bg-red-50/30 hover:bg-red-50" : "hover:bg-slate-50"}`}
                       >
-                        <td className="px-4 py-3 font-mono text-xs font-semibold text-gray-700 whitespace-nowrap">{row.ref}</td>
-                        <td className="px-4 py-3"><p className="font-semibold text-gray-900">{row.vendor}</p></td>
+                        <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700 whitespace-nowrap">{row.ref}</td>
+                        <td className="px-4 py-3"><p className="font-semibold text-slate-900">{row.vendor}</p></td>
                         <td className="px-4 py-3"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${src?.color || "bg-gray-100 text-gray-600"}`}>{Icon && <Icon className="w-3 h-3" />}{src?.label ?? row.category}</span></td>
-                        <td className="px-4 py-3 text-gray-600 max-w-[180px] truncate">{row.description}</td>
-                        <td className="px-4 py-3 font-bold text-gray-900 tabular-nums whitespace-nowrap">{fmt(row.amount)}</td>
-                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{fmtDate(row.due_date)}</td>
-                        <td className="px-4 py-3">{row.status !== "Paid" && row.status !== "Rejected" ? (<span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ${isOverdueActive ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>{isOverdueActive ? `Overdue ${row.agingDays}d` : `${row.agingDays}d`}</span>) : (<span className="text-gray-300 text-xs">—</span>)}</td>
+                        <td className="px-4 py-3 text-slate-600 max-w-[180px] truncate">{row.description}</td>
+                        <td className="px-4 py-3 font-bold text-slate-900 tabular-nums whitespace-nowrap">{fmt(row.amount)}</td>
+                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">{fmtDate(row.due_date)}</td>
+                        <td className="px-4 py-3">{row.status !== "Paid" && row.status !== "Rejected" ? (<span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ${isOverdueActive ? "bg-red-100 text-red-700" : "bg-indigo-50 text-indigo-700"}`}>{isOverdueActive ? `Overdue ${row.agingDays}d` : `${row.agingDays}d`}</span>) : (<span className="text-slate-300 text-xs">—</span>)}</td>
                         <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
                       </motion.tr>
                     );
@@ -789,12 +728,12 @@ function AccountsPayable() {
 
       {/* Pagination Controls */}
       <div className="flex items-center justify-between px-2">
-        <p className="text-xs text-gray-400 font-medium">Page {currentPage} of {totalPages || 1}</p>
+        <p className="text-xs text-slate-400 font-medium">Page {currentPage} of {totalPages || 1}</p>
         <div className="flex items-center gap-2">
-          <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-2 rounded-xl border border-gray-200 bg-white disabled:opacity-30 hover:bg-gray-50 transition-all">
+          <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 transition-all text-indigo-700">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="p-2 rounded-xl border border-gray-200 bg-white disabled:opacity-30 hover:bg-gray-50 transition-all">
+          <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 transition-all text-indigo-700">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

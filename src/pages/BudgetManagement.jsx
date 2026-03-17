@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../../database/supabase";
 
@@ -50,12 +50,85 @@ const UtilizationBar = ({ actual, committed, limit }) => {
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+
+// ─── SMART CALENDAR COMPONENT ────────────────────────────────────────────────
+const EnterpriseCalendar = ({ requests }) => {
+  const [viewDate, setViewDate] = useState(new Date());
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  
+  const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
+  const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay();
+  
+  const mappedRequests = useMemo(() => {
+    const data = {};
+    (requests || []).forEach(r => {
+      const d = r.createdAt ? new Date(r.createdAt).toDateString() : null;
+      if (!d) return;
+      if (!data[d]) data[d] = [];
+      data[d].push(r);
+    });
+    return data;
+  }, [requests]);
+
+  return (
+    <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm overflow-hidden flex flex-col h-full border-b-4 border-b-emerald-600/20">
+      <div className="p-6 bg-emerald-50/50 border-b border-emerald-100 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-emerald-600 rounded-2xl text-white shadow-lg shadow-emerald-100 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          </div>
+          <div>
+            <h3 className="font-black text-emerald-950 leading-tight text-lg">Request Timeline</h3>
+            <p className="text-[10px] text-emerald-600 font-black uppercase tracking-[0.2em]">Budget Activity Log</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-emerald-100 shadow-sm">
+          <button onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-2 hover:bg-emerald-50 rounded-xl text-emerald-600 transition-colors">◄</button>
+          <span className="text-xs font-black text-emerald-900 px-3 min-w-[130px] text-center uppercase tracking-tighter">{monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
+          <button onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-2 hover:bg-emerald-50 rounded-xl text-emerald-600 transition-colors">►</button>
+        </div>
+      </div>
+      
+      <div className="p-6 grid grid-cols-7 gap-3 flex-1">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+          <div key={d} className="text-[10px] font-black text-emerald-300 uppercase text-center mb-2 tracking-widest">{d}</div>
+        ))}
+        {Array(firstDay).fill(null).map((_, i) => <div key={`pad-${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const d = i + 1;
+          const fullDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), d).toDateString();
+          const dayReqs = mappedRequests[fullDate] || [];
+          const isToday = new Date().toDateString() === fullDate;
+
+          return (
+            <div key={d} className={`relative min-h-[60px] border border-emerald-50 rounded-2xl p-2 transition-all hover:border-emerald-300 hover:bg-emerald-50/50 group cursor-default ${isToday ? 'bg-emerald-100/30 border-emerald-300 ring-4 ring-emerald-50' : ''}`}>
+              <span className={`text-xs font-black ${isToday ? 'text-emerald-700' : 'text-gray-400'}`}>{d}</span>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {dayReqs.slice(0, 4).map((req, idx) => (
+                  <div key={idx} className={`h-2 w-2 rounded-full shadow-sm ${req.status === 'Approved' ? 'bg-emerald-500' : req.status === 'Pending' ? 'bg-amber-400' : 'bg-red-400'}`} title={req.categoryName} />
+                ))}
+                {dayReqs.length > 4 && <span className="text-[8px] font-black text-emerald-600">+{dayReqs.length - 4}</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="px-6 py-4 bg-emerald-50/30 border-t border-emerald-100 flex gap-6">
+        <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm" /><span className="text-[10px] font-black text-emerald-800 uppercase">Approved</span></div>
+        <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-sm" /><span className="text-[10px] font-black text-emerald-800 uppercase">Pending</span></div>
+        <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-red-400 shadow-sm" /><span className="text-[10px] font-black text-emerald-800 uppercase">Rejected</span></div>
+      </div>
+    </div>
+  );
+};
+
 function BudgetManagement() {
   // ── Budget overview state ──────────────────────────────────────────────────
   const [rows, setRows] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [metrics, setMetrics] = useState({ monthlyRevenue: 0, yearlyRevenue: 0 });
 
   // ── Budget requests state — Operational (log1_budget_requests) ───────────
   const [budgetRequests, setBudgetRequests] = useState([]);
@@ -115,9 +188,32 @@ function BudgetManagement() {
     setIsLoading(true);
     setError("");
     try {
-      // FIX: Always fetch ALL fin_budget_categories independently so that
-      // getCategoryById() works even when fin_budget_management is empty
-      // or a request references a category with no budget row yet.
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+      const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
+      const startOfNextYear = new Date(now.getFullYear() + 1, 0, 1).toISOString();
+      
+      const { data: revMonth, error: revMonthErr } = await supabase
+        .from("core1_boundary_payments")
+        .select("amount, payment_date")
+        .gte("payment_date", startOfMonth)
+        .lt("payment_date", startOfNextMonth)
+        .eq("status", "PAID");
+      if (revMonthErr) throw revMonthErr;
+      const { data: revYear, error: revYearErr } = await supabase
+        .from("core1_boundary_payments")
+        .select("amount, payment_date")
+        .gte("payment_date", startOfYear)
+        .lt("payment_date", startOfNextYear)
+        .eq("status", "PAID");
+      if (revYearErr) throw revYearErr;
+      
+      setMetrics({
+        monthlyRevenue: (revMonth || []).reduce((s, r) => s + Number(r?.amount || 0), 0),
+        yearlyRevenue: (revYear || []).reduce((s, r) => s + Number(r?.amount || 0), 0)
+      });
+
       const { data: allCats, error: catsErr } = await supabase
         .from("fin_budget_categories")
         .select("id, code, name, department, description, is_active")
@@ -298,6 +394,7 @@ function BudgetManagement() {
           budgetRowId: existing?.budgetId ?? null,
           limitInput: existing?.limit != null ? String(existing.limit) : "",
           periodYear: existing?.periodYear ?? currentYear,
+          periodMonth: existing?.periodMonth ?? new Date().getMonth() + 1,
           notes: existing?.notes ?? "",
         };
       });
@@ -336,30 +433,47 @@ function BudgetManagement() {
     try {
       const { data: auth } = await supabase.auth.getUser();
       const setBy = auth?.user?.email ?? "System";
-      const now = new Date().toISOString();
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      const nowIso = now.toISOString();
 
-      const toUpdate = []; // categories that already have a fin_budget_management row
-      const toInsert = []; // categories that don't have one yet
+      const toUpdate = []; 
+      const toInsert = []; 
 
       allCategories.forEach((cat) => {
         const draft = setupDraft[cat.id] ?? {};
         const limit = num(draft.limitInput);
-        const year = num(draft.periodYear) || new Date().getFullYear();
+        const year = num(draft.periodYear) || currentYear;
+        const month = num(draft.periodMonth) || currentMonth;
+        
+        // 1. STRICT DATE GUARD
+        if (year < currentYear || (year === currentYear && month < currentMonth)) {
+            throw new Error(`Forbidden: You cannot set a budget for past dates (${cat.name}).`);
+        }
+        
+        // 2. REVENUE GUARD (Max 80% of Month or Year)
+        const safetyCap = year > currentYear ? num(metrics.yearlyRevenue) * 0.8 : num(metrics.monthlyRevenue) * 0.8;
+        if (limit > 0 && safetyCap <= 0) {
+            throw new Error(`Revenue Guard: Cannot set budget for ${cat.name} because revenue baseline is zero.`);
+        }
+        if (limit > safetyCap && limit > 0 && safetyCap > 0) {
+            throw new Error(`Revenue Guard: Limit for ${cat.name} (₱${fmt(limit)}) exceeds 80% of current Revenue capacity (₱${fmt(safetyCap)}).`);
+        }
+
         const existing = rows.find((r) => r.categoryId === cat.id);
 
         if (existing?.budgetId) {
-          // UPDATE — only change limit_amount, period_year, notes, set_by, updated_at.
-          // actual_spend and committed_amount are untouched.
           toUpdate.push({
-            id: existing.budgetId, // PK — identifies exact row
+            id: existing.budgetId,
             limit_amount: limit,
             period_year: year,
+            period_month: month,
             notes: draft.notes ?? null,
             set_by: setBy,
-            updated_at: now,
+            updated_at: nowIso,
           });
         } else {
-          // INSERT — brand-new row; actual_spend + committed_amount start at 0
           toInsert.push({
             budget_category_id: cat.id,
             category: cat.name,
@@ -367,32 +481,25 @@ function BudgetManagement() {
             actual_spend: 0,
             committed_amount: 0,
             period_year: year,
+            period_month: month,
             notes: draft.notes ?? null,
             set_by: setBy,
-            updated_at: now,
+            updated_at: nowIso,
           });
         }
       });
 
-      // Run UPDATEs — one per existing row (keyed by PK)
       for (const row of toUpdate) {
         const { id, ...fields } = row;
-        const { error } = await supabase
-          .from("fin_budget_management")
-          .update(fields)
-          .eq("id", id);
+        const { error } = await supabase.from("fin_budget_management").update(fields).eq("id", id);
         if (error) throw error;
       }
 
-      // Run INSERTs — batch all new rows in one call
       if (toInsert.length > 0) {
-        const { error } = await supabase
-          .from("fin_budget_management")
-          .insert(toInsert);
+        const { error } = await supabase.from("fin_budget_management").insert(toInsert);
         if (error) throw error;
       }
 
-      // Refresh overview so new limits appear immediately
       await loadBudgetOverview();
       handleCloseSetup();
     } catch (err) {
@@ -550,12 +657,18 @@ function BudgetManagement() {
         .maybeSingle();
       if (budgetFetchErr) throw budgetFetchErr;
 
+      if (!budgetRow) {
+        setActionError(`Fatal: No budget limit set for "${selectedRequest.categoryName}". Set budget limits first.`);
+        setIsProcessing(false);
+        return;
+      }
+
       const currentLimit = num(budgetRow?.limit_amount);
       const currentActual = num(budgetRow?.actual_spend);
       const currentCommitted = num(budgetRow?.committed_amount);
       const available = currentLimit - currentActual - currentCommitted;
 
-      if (budgetRow && currentLimit > 0 && selectedRequest.amount > available) {
+      if (currentLimit > 0 && selectedRequest.amount > available) {
         setActionError(
           `Approval would exceed the budget for "${selectedRequest.categoryName}". ` +
             `Available: ₱${fmt(available)} | Requested: ₱${fmt(selectedRequest.amount)}`,
@@ -695,7 +808,7 @@ function BudgetManagement() {
   };
 
   // ── Derived totals ─────────────────────────────────────────────────────────
-  const statusCounts = budgetRequests.reduce(
+  const statusCounts = (budgetRequests || []).reduce(
     (acc, r) => {
       acc[r.status] = (acc[r.status] || 0) + 1;
       return acc;
@@ -704,11 +817,11 @@ function BudgetManagement() {
   );
   const filteredRequests =
     statusFilter === "All"
-      ? budgetRequests
-      : budgetRequests.filter((r) => r.status === statusFilter);
+      ? (budgetRequests || [])
+      : (budgetRequests || []).filter((r) => r.status === statusFilter);
 
   // ── HR derived counts ──────────────────────────────────────────────────────
-  const hrStatusCounts = hrRequests.reduce(
+  const hrStatusCounts = (hrRequests || []).reduce(
     (acc, r) => {
       acc[r.status] = (acc[r.status] || 0) + 1;
       return acc;
@@ -717,17 +830,34 @@ function BudgetManagement() {
   );
   const filteredHrRequests =
     hrStatusFilter === "All"
-      ? hrRequests
-      : hrRequests.filter((r) => r.status === hrStatusFilter);
-  const totalAllocated = rows.reduce((s, r) => s + r.limit, 0);
-  const totalSpent = rows.reduce((s, r) => s + r.actual, 0);
-  const totalCommitted = rows.reduce((s, r) => s + r.committed, 0);
+      ? (hrRequests || [])
+      : (hrRequests || []).filter((r) => r.status === hrStatusFilter);
+  const totalAllocated = (rows || []).reduce((s, r) => s + num(r?.limit), 0);
+  const totalSpent = (rows || []).reduce((s, r) => s + num(r?.actual), 0);
+  const totalCommitted = (rows || []).reduce((s, r) => s + num(r?.committed), 0);
   const totalAvailable = totalAllocated - totalSpent - totalCommitted;
 
   // ── Total of draft limits (live preview inside the setup modal) ────────────
-  const draftTotal = allCategories.reduce(
+  const draftTotal = (allCategories || []).reduce(
     (s, cat) => s + num(setupDraft[cat.id]?.limitInput),
     0,
+  );
+  const calendarRequests = useMemo(
+    () => [
+      ...(budgetRequests || []).map((r) => ({
+        id: `op-${r.id}`,
+        createdAt: r.createdAt,
+        status: r.status,
+        categoryName: r.categoryName,
+      })),
+      ...(hrRequests || []).map((r) => ({
+        id: `hr-${r.id}`,
+        createdAt: r.createdAt,
+        status: r.status,
+        categoryName: r.trainingName || "HR Training",
+      })),
+    ],
+    [budgetRequests, hrRequests],
   );
   
 
@@ -815,6 +945,44 @@ function BudgetManagement() {
             <p className="text-[10px] text-gray-400 mt-1">{kpi.sub}</p>
           </div>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 min-h-[520px]">
+          <EnterpriseCalendar requests={calendarRequests} />
+        </div>
+        <div className="rounded-3xl border border-emerald-100 bg-white p-5 shadow-sm border-b-4 border-b-emerald-600/20 h-fit">
+          <div className="mb-4">
+            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">
+              Budget Guard Preview
+            </p>
+            <h3 className="text-lg font-black text-emerald-950 mt-1">
+              Revenue-linked Safety Cap
+            </h3>
+          </div>
+          <div className="space-y-3">
+            <div className="rounded-2xl bg-emerald-50 p-3 border border-emerald-100">
+              <p className="text-[10px] font-bold text-emerald-500 uppercase">Current Monthly Revenue</p>
+              <p className="text-xl font-black text-emerald-700 tabular-nums">₱{fmt(metrics?.monthlyRevenue)}</p>
+              <p className="text-[11px] text-emerald-600 mt-1">Allowed budget max (80%): ₱{fmt(num(metrics?.monthlyRevenue) * 0.8)}</p>
+            </div>
+            <div className="rounded-2xl bg-emerald-50 p-3 border border-emerald-100">
+              <p className="text-[10px] font-bold text-emerald-500 uppercase">Current Year Revenue</p>
+              <p className="text-xl font-black text-emerald-700 tabular-nums">₱{fmt(metrics?.yearlyRevenue)}</p>
+              <p className="text-[11px] text-emerald-600 mt-1">Allowed yearly max (80%): ₱{fmt(num(metrics?.yearlyRevenue) * 0.8)}</p>
+            </div>
+            <div className="rounded-2xl bg-gray-50 p-3 border border-gray-100">
+              <p className="text-[10px] font-bold text-gray-500 uppercase">Current Available Budget</p>
+              <p className={`text-xl font-black tabular-nums ${totalAvailable < 0 ? "text-red-600" : "text-emerald-700"}`}>
+                {totalAvailable < 0 ? "−" : ""}₱{fmt(Math.abs(totalAvailable))}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-gray-50 p-3 border border-gray-100">
+              <p className="text-[10px] font-bold text-gray-500 uppercase">Live Draft Total</p>
+              <p className="text-xl font-black text-gray-900 tabular-nums">₱{fmt(draftTotal)}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col gap-8">
@@ -1260,6 +1428,9 @@ function BudgetManagement() {
                         (r) => r.categoryId === cat.id,
                       );
                       const hasExisting = !!existing;
+                      const now = new Date();
+                      const currentYear = now.getFullYear();
+                      const currentMonth = now.getMonth() + 1;
 
                       return (
                         <div
@@ -1308,8 +1479,28 @@ function BudgetManagement() {
                                   )
                                 }
                                 className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-center tabular-nums outline-none focus:ring-2 focus:ring-blue-100 bg-white"
-                                min={2020}
+                                min={currentYear}
                                 max={2099}
+                              />
+                            </div>
+
+                            <div className="w-20 shrink-0">
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">
+                                Month
+                              </label>
+                              <input
+                                type="number"
+                                value={draft.periodMonth ?? currentMonth}
+                                onChange={(e) =>
+                                  updateDraft(
+                                    cat.id,
+                                    "periodMonth",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-center tabular-nums outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                                min={1}
+                                max={12}
                               />
                             </div>
 

@@ -253,7 +253,7 @@ function AccountsReceivable() {
                           <button
                             type="button"
                             onClick={() => handleReportToAdmin(r)}
-                            className="px-3 py-2 rounded-xl border border-indigo-200 bg-white text-indigo-700 text-xs font-semibold hover:bg-indigo-50 flex items-center gap-1.5"
+                            className="px-3 py-2 rounded-xl border border-emerald-200 bg-white text-emerald-700 text-xs font-semibold hover:bg-emerald-50 flex items-center gap-1.5"
                           >
                             <AlertTriangle className="w-4 h-4" />
                             Report
@@ -261,28 +261,28 @@ function AccountsReceivable() {
                           <button
                             type="button"
                             onClick={() => setActiveRemindId((prev) => (prev === r.id ? null : r.id))}
-                            className="px-3 py-2 rounded-xl border border-indigo-200 bg-white text-indigo-700 text-xs font-semibold hover:bg-indigo-50 flex items-center gap-1.5"
+                            className="px-3 py-2 rounded-xl border border-emerald-200 bg-white text-emerald-700 text-xs font-semibold hover:bg-emerald-50 flex items-center gap-1.5"
                           >
                             <Bell className="w-4 h-4" />
                             Remind
                           </button>
                         </div>
                         {activeRemindId === r.id && (
-                          <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-2">
+                          <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 mb-2">
                               Quick Reminder
                             </p>
                             <div className="flex flex-wrap gap-2">
                               {r?.phone ? (
                                 <a
                                   href={`tel:${r.phone}`}
-                                  className="px-3 py-2 rounded-xl bg-white border border-indigo-200 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-50"
+                                  className="px-3 py-2 rounded-xl bg-white border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-1.5 hover:bg-emerald-50"
                                 >
                                   <Phone className="w-4 h-4" />
                                   Call
                                 </a>
                               ) : (
-                                <span className="px-3 py-2 rounded-xl bg-white border border-indigo-100 text-indigo-400 text-xs font-semibold flex items-center gap-1.5 opacity-60">
+                                <span className="px-3 py-2 rounded-xl bg-white border border-emerald-100 text-emerald-400 text-xs font-semibold flex items-center gap-1.5 opacity-60">
                                   <Phone className="w-4 h-4" />
                                   Call
                                 </span>
@@ -294,13 +294,13 @@ function AccountsReceivable() {
                                       r.outstanding_balance
                                     )} for ${reminderDate}. Thank you!`
                                   )}`}
-                                  className="px-3 py-2 rounded-xl bg-white border border-indigo-200 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-50"
+                                  className="px-3 py-2 rounded-xl bg-white border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-1.5 hover:bg-emerald-50"
                                 >
                                   <MessageCircle className="w-4 h-4" />
                                   Message
                                 </a>
                               ) : (
-                                <span className="px-3 py-2 rounded-xl bg-white border border-indigo-100 text-indigo-400 text-xs font-semibold flex items-center gap-1.5 opacity-60">
+                                <span className="px-3 py-2 rounded-xl bg-white border border-emerald-100 text-emerald-400 text-xs font-semibold flex items-center gap-1.5 opacity-60">
                                   <MessageCircle className="w-4 h-4" />
                                   Message
                                 </span>
@@ -314,13 +314,13 @@ function AccountsReceivable() {
                                       r.outstanding_balance
                                     )} for ${reminderDate}. Thank you!`
                                   )}`}
-                                  className="px-3 py-2 rounded-xl bg-white border border-indigo-200 text-indigo-700 text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-50"
+                                  className="px-3 py-2 rounded-xl bg-white border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-1.5 hover:bg-emerald-50"
                                 >
                                   <Mail className="w-4 h-4" />
                                   Email
                                 </a>
                               ) : (
-                                <span className="px-3 py-2 rounded-xl bg-white border border-indigo-100 text-indigo-400 text-xs font-semibold flex items-center gap-1.5 opacity-60">
+                                <span className="px-3 py-2 rounded-xl bg-white border border-emerald-100 text-emerald-400 text-xs font-semibold flex items-center gap-1.5 opacity-60">
                                   <Mail className="w-4 h-4" />
                                   Email
                                 </span>
@@ -350,15 +350,15 @@ function AccountsReceivable() {
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase">Driver</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase">License</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase">Phone</th>
-                  <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase text-right">Boundary Due</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Driver</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">License</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Phone</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Boundary Due</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-200">
                 {(isLoadingAR || isLoadingToday) && (
                   <tr>
                     <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
@@ -423,7 +423,7 @@ function AccountsReceivable() {
                   type="button"
                   onClick={() => setTodayPage((p) => Math.max(1, p - 1))}
                   disabled={todayPageSafe === 1}
-                  className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-indigo-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-emerald-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <ChevronLeft className="w-4 h-4" /> Prev
                 </button>
@@ -431,7 +431,7 @@ function AccountsReceivable() {
                   type="button"
                   onClick={() => setTodayPage((p) => Math.min(todayTotalPages, p + 1))}
                   disabled={todayPageSafe === todayTotalPages}
-                  className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-indigo-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-emerald-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1.5"
                 >
                   Next <ChevronRight className="w-4 h-4" />
                 </button>

@@ -20,7 +20,7 @@ const SOURCE_MODULES = {
   procurement: {
     label: "Procurement",
     icon: Package,
-    color: "bg-blue-100 text-blue-700",
+    color: "bg-emerald-100 text-emerald-800",
   },
   "asset-maintenance": {
     label: "Asset Maintenance",
@@ -30,7 +30,7 @@ const SOURCE_MODULES = {
   "hr-payroll": {
     label: "HR Payroll",
     icon: Users,
-    color: "bg-violet-100 text-violet-700",
+    color: "bg-emerald-50 text-emerald-800",
   },
 };
 
@@ -67,6 +67,20 @@ const fmtDate = (iso) => {
         day: "2-digit",
         year: "numeric",
       });
+};
+
+const maskName = (fullName) => {
+  const parts = String(fullName || "")
+    .split(" ")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return "—";
+  const first = parts[0]?.[0] ? `${parts[0][0].toUpperCase()}*` : "—";
+  const last =
+    parts.length > 1 && parts[parts.length - 1]?.[0]
+      ? `${parts[parts.length - 1][0].toUpperCase()}*`
+      : "";
+  return last ? `${first} ${last}` : first;
 };
 
 // ─── Status Badge ──────────────────────────────────────────────────────────────
@@ -113,7 +127,7 @@ function RejectModal({ row, onClose, onConfirm, loading }) {
               Reject AP Entry
             </h2>
             <p className="text-xs text-gray-500">
-              {row?.ref} · {row?.vendor}
+              {row?.ref} · {maskName(row?.vendor)}
             </p>
           </div>
         </div>
@@ -205,7 +219,7 @@ function DetailModal({
         <div className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: "Vendor / Payee", value: row.vendor },
+              { label: "Vendor / Payee", value: maskName(row?.vendor) },
               {
                 label: "Category",
                 value: src ? (
@@ -266,8 +280,8 @@ function DetailModal({
 
           {/* Approval info */}
           {row.approved_by && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-xs text-indigo-700 space-y-0.5">
-              <p className="font-bold uppercase tracking-wider text-[10px] text-indigo-500">
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-xs text-emerald-700 space-y-0.5">
+              <p className="font-bold uppercase tracking-wider text-[10px] text-emerald-600">
                 Approval Info
               </p>
               <p>
@@ -280,8 +294,8 @@ function DetailModal({
 
           {/* GL Entry Preview */}
           {row.status === "Manager Approved" && (
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
-              <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1">
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">
                 GL Entry Preview
               </p>
               <div className="space-y-1">
@@ -296,12 +310,12 @@ function DetailModal({
                     type: "CR",
                     account: "2000-AP",
                     label: "Accounts Payable Liability",
-                    color: "text-indigo-700",
+                    color: "text-emerald-700",
                   },
                 ].map((line) => (
                   <div
                     key={line.type}
-                    className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-indigo-100"
+                    className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-emerald-100"
                   >
                     <div className="flex items-center gap-2">
                       <span
@@ -324,7 +338,7 @@ function DetailModal({
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-indigo-400 mt-2 italic">
+              <p className="text-[10px] text-emerald-500 mt-2 italic">
                 Posting will also auto-create a Disbursement Voucher.
               </p>
             </div>
@@ -338,7 +352,7 @@ function DetailModal({
                   <button
                     onClick={() => onApprove(row)}
                     disabled={actionLoading}
-                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
                   >
                     <CheckCircle2 className="w-4 h-4" /> Check Budget & Approve
                   </button>
@@ -355,7 +369,7 @@ function DetailModal({
                 <button
                   onClick={() => onPostGL(row)}
                   disabled={actionLoading}
-                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
                 >
                   {actionLoading ? (
                     <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -381,14 +395,11 @@ function AccountsPayable() {
   const [error, setError] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState({ category: "", status: "" });
+  const [filters, setFilters] = useState({ category: "" });
   const [budgetWarning, setBudgetWarning] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
   const [detailRow, setDetailRow] = useState(null);
-  const approvedStatuses = useMemo(
-    () => new Set(["Approved", "Manager Approved", "Posted to GL"]),
-    [],
-  );
+  const approvedStatuses = useMemo(() => new Set(["Approved"]), []);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -452,11 +463,11 @@ function AccountsPayable() {
   const mappedRows = useMemo(
     () =>
       rows.map((item) => {
-        const first = item.hr_proceedlist?.firstname;
-        const last = item.hr_proceedlist?.lastname;
+        const first = item?.hr_proceedlist?.firstname;
+        const last = item?.hr_proceedlist?.lastname;
         const employeeName = [first, last].filter(Boolean).join(" ");
-        const isPayroll = String(item.category || "").toLowerCase().includes("payroll");
-        const vendorName = item.vendor_name ?? "Unknown";
+        const isPayroll = String(item?.category || "").toLowerCase().includes("payroll");
+        const vendorName = item?.vendor_name ?? "Unknown";
         const vendor = isPayroll && employeeName ? employeeName : vendorName;
         const createdAt = item?.created_at ?? null;
         const createdDate = createdAt ? new Date(createdAt) : null;
@@ -464,17 +475,17 @@ function AccountsPayable() {
         const safeCreatedTime = Number.isFinite(createdTime) ? createdTime : today.getTime();
         const agingDays = Math.max(0, Math.floor((today.getTime() - safeCreatedTime) / 86400000));
         return {
-          id: item.id,
-          ref: item.ref_no,
-          description: item.description ?? "—",
-          amount: Number(item.amount || 0),
-          category: item.category ?? "uncategorized",
+          id: item?.id,
+          ref: item?.ref_no ?? "",
+          description: item?.description ?? "—",
+          amount: Number(item?.amount || 0),
+          category: item?.category ?? "uncategorized",
           vendor,
-          status: item.status ?? "Pending",
-          created_at: item.created_at ?? new Date().toISOString(),
-          due_date: item.due_date ?? null,
-          approved_by: item.approved_by ?? null,
-          approved_at: item.approved_at ?? null,
+          status: item?.status ?? "Pending",
+          created_at: item?.created_at ?? new Date().toISOString(),
+          due_date: item?.due_date ?? null,
+          approved_by: item?.approved_by ?? null,
+          approved_at: item?.approved_at ?? null,
           agingDays,
           agingBucket: agingDays > 30 ? "Overdue" : "Current",
           isReleased: !!item?._released,
@@ -483,40 +494,12 @@ function AccountsPayable() {
     [rows, today],
   );
 
-  const kpis = useMemo(() => {
-    const unpaid = mappedRows.filter(
-      (r) => !r.isReleased && r.status !== "Rejected",
-    );
-    const overdueRows = unpaid.filter((r) => r.agingDays > 30);
-    const currentRows = unpaid.filter((r) => r.agingDays <= 30);
-    return {
-      totalUnpaid: unpaid.reduce((a, r) => a + Number(r?.amount || 0), 0),
-      current: currentRows.reduce((a, r) => a + Number(r?.amount || 0), 0),
-      overdue: overdueRows.reduce((a, r) => a + Number(r?.amount || 0), 0),
-      overdueCount: overdueRows.length,
-      pending: mappedRows.filter((r) => r.status === "Pending").length,
-    };
-  }, [mappedRows]);
-
-  const vendorBalances = useMemo(() => {
-    const map = new Map();
-    mappedRows
-      .filter((r) => !r.isReleased && r.status !== "Rejected")
-      .forEach((r) => {
-        map.set(r.vendor, (map.get(r.vendor) || 0) + Number(r?.amount || 0));
-      });
-    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  }, [mappedRows]);
-
   const approvedRows = useMemo(
     () => mappedRows.filter((r) => approvedStatuses.has(r.status) && !r.isReleased),
     [mappedRows, approvedStatuses],
   );
   const categoryOptions = [
     ...new Set(approvedRows.map((r) => r.category).filter(Boolean)),
-  ];
-  const statusOptions = [
-    ...new Set(approvedRows.map((r) => r.status).filter((s) => s)),
   ];
 
   const filteredRows = useMemo(
@@ -525,15 +508,53 @@ function AccountsPayable() {
         if (row.isReleased) return false;
 
         if (filters.category && row.category !== filters.category) return false;
-        if (filters.status && row.status !== filters.status) return false;
         if (search.trim()) {
           const q = search.toLowerCase();
-          return row.vendor.toLowerCase().includes(q) || row.ref.toLowerCase().includes(q) || row.description.toLowerCase().includes(q);
+          return (
+            row.vendor?.toLowerCase?.().includes(q) ||
+            row.ref?.toLowerCase?.().includes(q) ||
+            row.description?.toLowerCase?.().includes(q)
+          );
         }
         return true;
       }),
     [approvedRows, filters, search],
   );
+
+  const kpis = useMemo(() => {
+    const visible = filteredRows;
+    const now = today.getTime();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const monthStartTime = monthStart.getTime();
+    const nextMonthStartTime = nextMonthStart.getTime();
+    const monthRows = visible.filter((r) => {
+      const d = r?.created_at ? new Date(r.created_at) : null;
+      const t = d?.getTime?.();
+      if (!Number.isFinite(t)) return false;
+      return t >= monthStartTime && t < nextMonthStartTime;
+    });
+    const overdueRows = visible.filter((r) => {
+      const d = r?.created_at ? new Date(r.created_at) : null;
+      const t = d?.getTime?.();
+      if (!Number.isFinite(t)) return false;
+      return now - t > 30 * 86400000;
+    });
+    return {
+      totalUnpaid: visible.reduce((a, r) => a + Number(r?.amount || 0), 0),
+      monthTotal: monthRows.reduce((a, r) => a + Number(r?.amount || 0), 0),
+      overdueCount: overdueRows.length,
+      approvedCount: visible.length,
+    };
+  }, [filteredRows, today]);
+
+  const vendorBalances = useMemo(() => {
+    const map = new Map();
+    filteredRows.forEach((r) => {
+      map.set(r.vendor, (map.get(r.vendor) || 0) + Number(r?.amount || 0));
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [filteredRows]);
 
   // Logic for Paginated Rows
   const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
@@ -638,9 +659,9 @@ function AccountsPayable() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
         {[
           { label: "Total Unpaid", value: fmt(kpis.totalUnpaid), color: "border-slate-200", icon: <FileText className="w-4 h-4 text-slate-400" /> },
-          { label: `${today.toLocaleString("en-PH", { month: "long" })} Payables`, value: fmt(kpis.current), color: "border-indigo-200", icon: <Clock className="w-4 h-4 text-indigo-500" /> },
-          { label: "Overdue (31+d)", value: fmt(kpis.overdue), color: kpis.overdueCount > 0 ? "border-red-300" : "border-slate-200", icon: <AlertTriangle className={`w-4 h-4 ${kpis.overdueCount > 0 ? "text-red-500" : "text-slate-400"}`} /> },
-          { label: "Pending Approval", value: kpis.pending, color: "border-amber-200", icon: <Clock className="w-4 h-4 text-amber-500" /> },
+          { label: `${today.toLocaleString("en-PH", { month: "long" })} Payables`, value: fmt(kpis.monthTotal), color: "border-emerald-200", icon: <Clock className="w-4 h-4 text-emerald-600" /> },
+          { label: "Overdue (31+d)", value: kpis.overdueCount, color: kpis.overdueCount > 0 ? "border-red-300" : "border-slate-200", icon: <AlertTriangle className={`w-4 h-4 ${kpis.overdueCount > 0 ? "text-red-500" : "text-slate-400"}`} /> },
+          { label: "Approved for Payment", value: kpis.approvedCount, color: "border-emerald-200", icon: <CheckCircle2 className="w-4 h-4 text-emerald-600" /> },
         ].map((k) => (
           <div key={k.label} className={`bg-white rounded-2xl border ${k.color} p-4 shadow-sm`}>
             <div className="mb-2">{k.icon}</div>
@@ -657,8 +678,8 @@ function AccountsPayable() {
           <div className="flex flex-wrap gap-2">
             {vendorBalances.map(([vendor, amount]) => (
               <div key={vendor} className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-                <span className="text-sm font-semibold text-slate-800">{vendor}</span>
-                <span className="text-xs font-bold text-indigo-700">{fmt(amount)}</span>
+                <span className="text-sm font-semibold text-slate-800">{maskName(vendor)}</span>
+                <span className="text-xs font-bold text-emerald-700">{fmt(amount)}</span>
               </div>
             ))}
           </div>
@@ -670,13 +691,9 @@ function AccountsPayable() {
           <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <input className="bg-transparent outline-none placeholder-slate-400 flex-1 text-sm" placeholder="Search vendor, ref, description..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
         </div>
-        <select value={filters.category} onChange={(e) => { setFilters((p) => ({ ...p, category: e.target.value })); setCurrentPage(1); }} className="px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100">
+        <select value={filters.category} onChange={(e) => { setFilters((p) => ({ ...p, category: e.target.value })); setCurrentPage(1); }} className="px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100">
           <option value="">All Categories</option>
           {categoryOptions.map((c) => (<option key={c} value={c}>{SOURCE_MODULES[c]?.label ?? c}</option>))}
-        </select>
-        <select value={filters.status} onChange={(e) => { setFilters((p) => ({ ...p, status: e.target.value })); setCurrentPage(1); }} className="px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100">
-          <option value="">All Statuses</option>
-          {statusOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
         </select>
         <span className="ml-auto text-xs text-slate-400">{filteredRows.length} total records</span>
       </div>
@@ -686,7 +703,7 @@ function AccountsPayable() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                {["Ref No.", "Vendor / Payee", "Category", "Description", "Amount", "Due Date", "Aging", "Status"].map((h) => (
+                {["Ref No.", "Vendor / Payee", "Category", "Description", "Amount", "Due Date", "Aging"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -694,9 +711,9 @@ function AccountsPayable() {
             <tbody className="divide-y divide-slate-200">
               <AnimatePresence>
                 {isLoading ? (
-                  <tr key="loading"><td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-400">Loading...</td></tr>
+                  <tr key="loading"><td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-400">Loading...</td></tr>
                 ) : paginatedRows.length === 0 ? (
-                  <tr key="empty"><td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-400">No approved payables found.</td></tr>
+                  <tr key="empty"><td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-400">No approved payables found.</td></tr>
                 ) : (
                   paginatedRows.map((row, i) => {
                     const src = SOURCE_MODULES[row.category?.toLowerCase()] || SOURCE_MODULES[row.category];
@@ -708,14 +725,13 @@ function AccountsPayable() {
                         onClick={() => setDetailRow(row)}
                         className={`cursor-pointer transition-colors ${isOverdueActive ? "bg-red-50/30 hover:bg-red-50" : "hover:bg-slate-50"}`}
                       >
-                        <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700 whitespace-nowrap">{row.ref}</td>
-                        <td className="px-4 py-3"><p className="font-semibold text-slate-900">{row.vendor}</p></td>
+                        <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-700 whitespace-nowrap">{row?.ref}</td>
+                        <td className="px-4 py-3"><p className="font-semibold text-slate-900">{maskName(row?.vendor)}</p></td>
                         <td className="px-4 py-3"><span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${src?.color || "bg-gray-100 text-gray-600"}`}>{Icon && <Icon className="w-3 h-3" />}{src?.label ?? row.category}</span></td>
-                        <td className="px-4 py-3 text-slate-600 max-w-[180px] truncate">{row.description}</td>
-                        <td className="px-4 py-3 font-bold text-slate-900 tabular-nums whitespace-nowrap">{fmt(row.amount)}</td>
-                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">{fmtDate(row.due_date)}</td>
-                        <td className="px-4 py-3">{row.status !== "Paid" && row.status !== "Rejected" ? (<span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ${isOverdueActive ? "bg-red-100 text-red-700" : "bg-indigo-50 text-indigo-700"}`}>{isOverdueActive ? `Overdue ${row.agingDays}d` : `${row.agingDays}d`}</span>) : (<span className="text-slate-300 text-xs">—</span>)}</td>
-                        <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                        <td className="px-4 py-3 text-slate-600 max-w-[180px] truncate">{row?.description}</td>
+                        <td className="px-4 py-3 font-bold text-slate-900 tabular-nums whitespace-nowrap">{fmt(row?.amount)}</td>
+                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">{fmtDate(row?.due_date)}</td>
+                        <td className="px-4 py-3">{row.status !== "Paid" && row.status !== "Rejected" ? (<span className={`text-xs font-semibold px-2 py-0.5 rounded-lg ${isOverdueActive ? "bg-red-100 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{isOverdueActive ? `Overdue ${row.agingDays}d` : `${row.agingDays}d`}</span>) : (<span className="text-slate-300 text-xs">—</span>)}</td>
                       </motion.tr>
                     );
                   })
@@ -730,10 +746,10 @@ function AccountsPayable() {
       <div className="flex items-center justify-between px-2">
         <p className="text-xs text-slate-400 font-medium">Page {currentPage} of {totalPages || 1}</p>
         <div className="flex items-center gap-2">
-          <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 transition-all text-indigo-700">
+          <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 transition-all text-emerald-700">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 transition-all text-indigo-700">
+          <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 transition-all text-emerald-700">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

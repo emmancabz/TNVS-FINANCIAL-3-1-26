@@ -31,7 +31,7 @@ function AuditTrail() {
     <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-blue-500" />
+          <Activity className="w-4 h-4 text-emerald-500" />
           <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">System Activity Feed</span>
         </div>
       </div>
@@ -46,15 +46,15 @@ function AuditTrail() {
             className="p-4 hover:bg-gray-50 cursor-pointer transition-all group flex items-start justify-between"
           >
             <div className="flex gap-3">
-              <div className="mt-1 w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-blue-400" />
+              <div className="mt-1 w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                <Shield className="w-4 h-4 text-emerald-400" />
               </div>
               <div>
                 <p className="text-xs font-semibold text-gray-900 leading-snug">
                   {log.action}
                 </p>
                 <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
-                  <span className="font-bold text-blue-500 uppercase">
+                  <span className="font-bold text-emerald-500 uppercase">
                     {log.user_email?.split('@')[0] || 'Administrator'}
                   </span>
                   <span>•</span>
@@ -62,7 +62,7 @@ function AuditTrail() {
                 </div>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-400 transition-colors" />
+            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-emerald-400 transition-colors" />
           </motion.div>
         ))}
       </div>

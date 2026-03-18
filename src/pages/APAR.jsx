@@ -54,7 +54,7 @@ function APAR() {
                 Automatically categorizes payables into aging buckets: Current, 1-30 days, 31-60 days, 61-90 days, Over 90 days.
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Current: ₱1.2M</span>
+                <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded">Current: ₱1.2M</span>
                 <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded">1-30: ₱800K</span>
                 <span className="text-xs px-2 py-1 bg-orange-100 text-orange-700 rounded">31-60: ₱300K</span>
                 <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">Over 90: ₱200K</span>

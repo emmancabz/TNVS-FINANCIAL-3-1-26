@@ -23,7 +23,7 @@ export default function HelpCenter() {
       id: 'dashboard',
       title: 'Dashboard & Analytics',
       icon: LayoutDashboard,
-      color: 'text-blue-600',
+      color: 'text-emerald-600',
       content: 'The Dashboard provides a real-time overview of the organization’s financial health. It aggregates data from the Collections and Disbursement services to display Total Revenue, Total Expenses, and Net Profit. Key performance indicators (KPIs) help administrators visualize cash flow trends and identify budget variances at a glance.'
     },
     {
@@ -58,7 +58,7 @@ export default function HelpCenter() {
       id: 'budget',
       title: 'Budgeting & Allocation',
       icon: DollarSign,
-      color: 'text-purple-600',
+      color: 'text-emerald-600',
       content: 'Budget Management allows administrators to set financial ceilings for different departments or projects. The Budget Requests Service handles the workflow for requesting additional funds, ensuring that all spending remains within the approved fiscal framework.'
     },
     {
@@ -72,7 +72,7 @@ export default function HelpCenter() {
       id: 'security',
       title: 'Security & Audit Trail',
       icon: Shield,
-      color: 'text-indigo-600',
+      color: 'text-emerald-600',
       content: 'Accessed via the Header, Security Settings manage user permissions. The Audit Trail Service records every login, data modification, and deletion. This ensures "Zero-Trust" accountability, allowing admins to track who made a specific change and when.'
     },
     {

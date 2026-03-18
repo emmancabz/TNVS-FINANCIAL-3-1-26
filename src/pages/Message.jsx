@@ -36,6 +36,7 @@ function Message() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [adminQuery, setAdminQuery] = useState('')
   const [selectedAdmin, setSelectedAdmin] = useState(null)
+  const [conversationId, setConversationId] = useState(null) // Added state for conversation_id
   const bottomRef = useRef(null)
   const didPrefillRef = useRef(false)
   const location = useLocation()
@@ -82,6 +83,12 @@ function Message() {
       setLoadingMessages(true)
       setMessageError('')
       try {
+        // Fetch existing conversation id to use for this channel on load
+        const { data: convs } = await supabase.from('admin_conversations').select('id').limit(1)
+        if (convs && convs.length > 0) {
+          setConversationId(convs[0].id)
+        }
+
         const { data, error } = await supabase
           .from('admin_messages')
           .select('*')
@@ -136,27 +143,59 @@ function Message() {
     const content = messageInput.trim()
     setMessageInput('')
     setMessageError('')
-    const senderName =
-      currentUser?.user_metadata?.display_name ||
-      currentUser?.user_metadata?.full_name ||
-      currentUser?.email ||
-      'Admin'
-    const { data, error } = await supabase
-      .from('admin_messages')
-      .insert({
-        sender_id: currentUser.id,
-        sender_name: senderName,
-        content,
-      })
-      .select()
-      .single()
-    if (error) {
+
+    try {
+      // Ensure we have a conversation_id before inserting a message
+      let currentConvId = conversationId
+      if (!currentConvId) {
+        const { data: convs } = await supabase.from('admin_conversations').select('id').limit(1)
+        if (convs && convs.length > 0) {
+          currentConvId = convs[0].id
+        } else {
+          // Gagawa ng bagong conversation kung wala pa dahil required sa DB schema
+          const { data: newConv, error: convError } = await supabase
+            .from('admin_conversations')
+            .insert({ created_by: currentUser.id })
+            .select()
+            .single()
+
+          if (convError) throw convError
+          currentConvId = newConv.id
+
+          // Optional: I-add din agad sa members ang current user para match sa schema mo
+          await supabase.from('admin_conversation_members').insert({
+            conversation_id: currentConvId,
+            admin_id: currentUser.id
+          })
+        }
+        setConversationId(currentConvId)
+      }
+
+      const senderName =
+        currentUser?.user_metadata?.display_name ||
+        currentUser?.user_metadata?.full_name ||
+        currentUser?.email ||
+        'Admin'
+
+      const { data, error } = await supabase
+        .from('admin_messages')
+        .insert({
+          conversation_id: currentConvId, // Idinagdag na natin yung required field dito
+          sender_id: currentUser.id,
+          sender_name: senderName,
+          content,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      if (data) {
+        setMessages((prev) => (prev.some((msg) => msg.id === data.id) ? prev : [...prev, data]))
+      }
+    } catch (err) {
       setMessageInput(content)
-      setMessageError(error.message || String(error))
-      return
-    }
-    if (data) {
-      setMessages((prev) => (prev.some((msg) => msg.id === data.id) ? prev : [...prev, data]))
+      setMessageError(err.message || String(err))
     }
   }
 
@@ -268,10 +307,10 @@ function Message() {
                   <div key={message.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div
                       className={`max-w-[76%] rounded-2xl px-4 py-3 text-sm ${
-                        isMe ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
+                        isMe ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700'
                       }`}
                     >
-                      <div className={`text-[11px] mb-1 ${isMe ? 'text-blue-100' : 'text-gray-500'}`}>
+                      <div className={`text-[11px] mb-1 ${isMe ? 'text-emerald-100' : 'text-gray-500'}`}>
                         {message.sender_name || 'Admin'} · {formatTimestamp(message.created_at)}
                       </div>
                       <div className="whitespace-pre-wrap">{message.content}</div>
@@ -301,7 +340,7 @@ function Message() {
                 type="button"
                 onClick={handleSend}
                 disabled={!messageInput.trim()}
-                className="px-4 py-2.5 rounded-2xl text-sm font-semibold bg-blue-600 text-white disabled:bg-gray-200 disabled:text-gray-400 flex items-center gap-2"
+                className="px-4 py-2.5 rounded-2xl text-sm font-semibold bg-emerald-600 text-white disabled:bg-gray-200 disabled:text-gray-400 flex items-center gap-2"
               >
                 <Send className="w-4 h-4" />
                 <span>Send</span>

@@ -205,13 +205,13 @@ function GeneralLedger() {
       <div className="max-w-7xl mx-auto">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-emerald-900 mb-1 tracking-tight">General Ledger</h1>
-            <p className="text-emerald-700 text-sm">Master records · Live revenue and expense history</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1 tracking-tight">General Ledger</h1>
+            <p className="text-slate-600 text-sm">Master records · Live revenue and expense history</p>
           </div>
           <button
             type="button"
             onClick={() => setPeriodOpen(true)}
-            className="px-4 py-2 rounded-2xl border border-emerald-200 bg-white text-emerald-800 text-sm font-semibold hover:bg-emerald-50 flex items-center gap-2"
+            className="px-4 py-2 rounded-2xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 flex items-center gap-2"
           >
             Period: {periodRange.label}
             <ChevronDown className="w-4 h-4" />
@@ -219,49 +219,49 @@ function GeneralLedger() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="rounded-2xl border border-emerald-100 bg-white shadow-[0_6px_18px_rgba(16,185,129,0.12)] p-5 flex items-center gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 flex items-center gap-3">
             <TrendingUp className="w-8 h-8 text-emerald-600" />
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Revenue</p>
-              <p className="text-xl font-black text-emerald-800 tabular-nums">{fmtCurrency(revenue)}</p>
+              <p className="text-xl font-black text-slate-900 tabular-nums">{fmtCurrency(revenue)}</p>
             </div>
           </div>
-          <div className="rounded-2xl border border-emerald-100 bg-white shadow-[0_6px_18px_rgba(16,185,129,0.12)] p-5 flex items-center gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 flex items-center gap-3">
             <TrendingDown className="w-8 h-8 text-emerald-600" />
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Expenses</p>
-              <p className="text-xl font-black text-emerald-800 tabular-nums">{fmtCurrency(expenses)}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Expenses</p>
+              <p className="text-xl font-black text-slate-900 tabular-nums">{fmtCurrency(expenses)}</p>
             </div>
           </div>
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 shadow-[0_6px_18px_rgba(16,185,129,0.12)] p-5 flex items-center gap-3">
-            <FileText className="w-8 h-8 text-emerald-700" />
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 flex items-center gap-3">
+            <FileText className="w-8 h-8 text-emerald-600" />
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Net Profit</p>
-              <p className="text-xl font-black text-emerald-900 tabular-nums">{fmtCurrency(netProfit)}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Net Profit</p>
+              <p className="text-xl font-black text-slate-900 tabular-nums">{fmtCurrency(netProfit)}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-emerald-100 bg-white shadow-[0_8px_24px_rgba(16,185,129,0.08)] p-4 mb-4">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 mb-4">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50/40">
-              <span className="text-xs font-semibold text-emerald-700">From</span>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50">
+              <span className="text-xs font-semibold text-slate-600">From</span>
               <input
                 type="date"
                 value={fromDate}
                 max={todayStr}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="bg-transparent text-sm text-emerald-900 focus:outline-none"
+                className="bg-transparent text-sm text-slate-900 focus:outline-none"
               />
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50/40">
-              <span className="text-xs font-semibold text-emerald-700">To</span>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50">
+              <span className="text-xs font-semibold text-slate-600">To</span>
               <input
                 type="date"
                 value={toDate}
                 max={todayStr}
                 onChange={(e) => setToDate(e.target.value)}
-                className="bg-transparent text-sm text-emerald-900 focus:outline-none"
+                className="bg-transparent text-sm text-slate-900 focus:outline-none"
               />
             </div>
 
@@ -277,8 +277,8 @@ function GeneralLedger() {
                   onClick={() => setTxnFilter(t.key)}
                   className={`px-3 py-2 rounded-xl text-xs font-semibold border transition ${
                     txnFilter === t.key
-                      ? 'bg-emerald-700 text-white border-emerald-700'
-                      : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                      ? 'bg-emerald-600 text-white border-emerald-600'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                   }`}
                 >
                   {t.label}
@@ -286,29 +286,29 @@ function GeneralLedger() {
               ))}
             </div>
           </div>
-          <div className="mt-2 text-xs text-emerald-500">
-            Showing <span className="font-semibold text-emerald-700">{filtered.length}</span> transaction(s)
+          <div className="mt-2 text-xs text-slate-500">
+            Showing <span className="font-semibold text-slate-700">{filtered.length}</span> transaction(s)
           </div>
         </div>
 
-        <div className="rounded-2xl border border-emerald-100 bg-white shadow-[0_8px_24px_rgba(16,185,129,0.08)] overflow-hidden">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-emerald-50 border-b border-emerald-100">
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-5 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Type</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Counterparty</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Description</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Account</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">Reference</th>
-                  <th className="px-5 py-4 text-right text-xs font-bold text-emerald-700 uppercase tracking-wider">Amount</th>
-                  <th className="px-5 py-4 text-right text-xs font-bold text-emerald-700 uppercase tracking-wider">Date</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Type</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Counterparty</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Description</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Account</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Reference</th>
+                  <th className="px-5 py-4 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Amount</th>
+                  <th className="px-5 py-4 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-emerald-100">
+              <tbody className="divide-y divide-slate-200">
                 {isLoading && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-12 text-center text-emerald-500">
+                    <td colSpan={7} className="px-5 py-12 text-center text-slate-400">
                       Loading…
                     </td>
                   </tr>
@@ -322,7 +322,7 @@ function GeneralLedger() {
                 )}
                 {!isLoading && !error && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-12 text-center text-emerald-700 font-semibold">
+                    <td colSpan={7} className="px-5 py-12 text-center text-slate-600 font-semibold">
                       No transactions found for this filter.
                     </td>
                   </tr>
@@ -335,7 +335,7 @@ function GeneralLedger() {
                     return (
                       <tr
                         key={row?.id}
-                        className="hover:bg-emerald-50/40 transition-colors cursor-pointer"
+                        className="hover:bg-slate-50 transition-colors cursor-pointer"
                         onClick={() => setSelectedEntry(row)}
                       >
                         <td className="px-5 py-4">
@@ -347,10 +347,10 @@ function GeneralLedger() {
                             {isDebit ? 'DEBIT' : 'CREDIT'}
                           </span>
                         </td>
-                        <td className="px-5 py-4 font-semibold text-emerald-900">{maskName(row?.counterparty_name)}</td>
-                        <td className="px-5 py-4 text-emerald-900/80">{row?.description || '—'}</td>
-                        <td className="px-5 py-4 text-emerald-700 font-mono text-[11px]">{row?.account_code || '—'}</td>
-                        <td className="px-5 py-4 text-emerald-700 font-mono text-[11px]">{row?.reference_id || '—'}</td>
+                        <td className="px-5 py-4 font-semibold text-slate-900">{maskName(row?.counterparty_name)}</td>
+                        <td className="px-5 py-4 text-slate-700">{row?.description || '—'}</td>
+                        <td className="px-5 py-4 text-slate-600 font-mono text-[11px]">{row?.account_code || '—'}</td>
+                        <td className="px-5 py-4 text-slate-600 font-mono text-[11px]">{row?.reference_id || '—'}</td>
                         <td
                           className={`px-5 py-4 text-right font-black tabular-nums ${
                             isDebit ? 'text-emerald-700' : 'text-rose-700'
@@ -358,7 +358,7 @@ function GeneralLedger() {
                         >
                           {isDebit ? `+${fmtCurrency(amount)}` : `-${fmtCurrency(amount)}`}
                         </td>
-                        <td className="px-5 py-4 text-right text-emerald-700">{formatDateTime(row?.transaction_date)}</td>
+                        <td className="px-5 py-4 text-right text-slate-600">{formatDateTime(row?.transaction_date)}</td>
                       </tr>
                     )
                   })}
@@ -367,8 +367,8 @@ function GeneralLedger() {
           </div>
 
           {!isLoading && !error && filtered.length > 0 && (
-            <div className="px-5 py-4 border-t border-emerald-100 flex items-center justify-between">
-              <p className="text-xs text-emerald-700">
+            <div className="px-5 py-4 border-t border-slate-200 flex items-center justify-between">
+              <p className="text-xs text-slate-600">
                 Page <span className="font-semibold">{pageSafe}</span> of{' '}
                 <span className="font-semibold">{totalPages}</span>
               </p>
@@ -377,7 +377,7 @@ function GeneralLedger() {
                   type="button"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={pageSafe === 1}
-                  className="px-3 py-2 rounded-xl border border-emerald-200 bg-white text-emerald-700 text-xs font-semibold hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-emerald-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1.5"
                 >
                   <ChevronLeft className="w-4 h-4" /> Prev
                 </button>
@@ -385,7 +385,7 @@ function GeneralLedger() {
                   type="button"
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={pageSafe === totalPages}
-                  className="px-3 py-2 rounded-xl border border-emerald-200 bg-white text-emerald-700 text-xs font-semibold hover:bg-emerald-50 disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-emerald-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1.5"
                 >
                   Next <ChevronRight className="w-4 h-4" />
                 </button>
@@ -410,9 +410,9 @@ function GeneralLedger() {
               exit={{ scale: 0.98, y: 10 }}
               transition={{ type: 'spring', stiffness: 280, damping: 26 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl shadow-2xl border border-emerald-100 w-full max-w-md overflow-hidden"
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden"
             >
-              <div className="px-5 py-4 bg-emerald-700 text-white flex items-center justify-between">
+              <div className="px-5 py-4 bg-emerald-600 text-white flex items-center justify-between">
                 <div className="text-sm font-semibold">Select Period</div>
                 <button type="button" onClick={() => setPeriodOpen(false)} className="p-1 rounded-lg hover:bg-white/10">
                   <X className="w-4 h-4" />
@@ -430,8 +430,8 @@ function GeneralLedger() {
                       onClick={() => setPeriodMode(m.key)}
                       className={`flex-1 px-3 py-2 rounded-xl text-xs font-semibold border ${
                         periodMode === m.key
-                          ? 'bg-emerald-700 text-white border-emerald-700'
-                          : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
                       {m.label}
@@ -440,13 +440,13 @@ function GeneralLedger() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Year
                   </label>
                   <select
                     value={periodYear}
                     onChange={(e) => setPeriodYear(Math.min(Number(e.target.value), currentYear))}
-                    className="w-full px-3 py-2 rounded-xl border border-emerald-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
                   >
                     {yearOptions.map((y) => (
                       <option key={y} value={y}>
@@ -458,7 +458,7 @@ function GeneralLedger() {
 
                 {periodMode === 'month' && (
                   <div>
-                    <label className="block text-[11px] font-bold text-emerald-600 uppercase tracking-wider mb-1">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                       Month
                     </label>
                     <select
@@ -468,7 +468,7 @@ function GeneralLedger() {
                         const safe = periodYear === currentYear ? Math.min(next, currentMonthIndex) : next
                         setPeriodMonthIndex(safe)
                       }}
-                      className="w-full px-3 py-2 rounded-xl border border-emerald-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
                     >
                       {monthOptions.map((m) => (
                         <option key={m.value} value={m.value} disabled={m.disabled}>
@@ -483,7 +483,7 @@ function GeneralLedger() {
                   <button
                     type="button"
                     onClick={() => setPeriodOpen(false)}
-                    className="flex-1 px-4 py-2.5 rounded-xl border border-emerald-200 bg-white text-emerald-700 text-sm font-semibold hover:bg-emerald-50"
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50"
                   >
                     Done
                   </button>
@@ -511,7 +511,7 @@ function GeneralLedger() {
                       setToDate(endStr)
                       setPeriodOpen(false)
                     }}
-                    className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-700 text-white text-sm font-semibold hover:bg-emerald-800"
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700"
                   >
                     Apply to Filters
                   </button>
@@ -537,11 +537,11 @@ function GeneralLedger() {
               exit={{ scale: 0.98, y: 10 }}
               transition={{ type: 'spring', stiffness: 280, damping: 26 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl shadow-2xl border border-emerald-100 w-full max-w-lg overflow-hidden"
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden"
             >
-              <div className="px-5 py-4 bg-emerald-700 text-white flex items-center justify-between">
+              <div className="px-5 py-4 bg-emerald-600 text-white flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-100">Transaction</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Transaction</p>
                   <p className="text-base font-semibold">{selectedEntry?.type}</p>
                 </div>
                 <button type="button" onClick={() => setSelectedEntry(null)} className="p-1 rounded-lg hover:bg-white/10">
@@ -557,13 +557,13 @@ function GeneralLedger() {
                   { label: 'Date', value: formatDateTime(selectedEntry?.transaction_date) },
                 ].map((item) => (
                   <div key={item.label} className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">{item.label}</div>
-                    <div className="text-sm font-semibold text-emerald-900 text-right">{item.value}</div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{item.label}</div>
+                    <div className="text-sm font-semibold text-slate-900 text-right">{item.value}</div>
                   </div>
                 ))}
-                <div className="pt-3 border-t border-emerald-100">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 mb-1">Description</div>
-                  <div className="text-sm text-emerald-900/80 whitespace-pre-wrap">{selectedEntry?.description || '—'}</div>
+                <div className="pt-3 border-t border-slate-200">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Description</div>
+                  <div className="text-sm text-slate-700 whitespace-pre-wrap">{selectedEntry?.description || '—'}</div>
                 </div>
               </div>
             </motion.div>

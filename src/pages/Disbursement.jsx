@@ -18,8 +18,8 @@ const FLOW_LABELS = {
   },
   "AP Approved": {
     label: "AP Approved",
-    color: "bg-blue-50 text-blue-700 border border-blue-200",
-    dot: "bg-blue-500",
+    color: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+    dot: "bg-emerald-500",
   },
   Settled: {
     label: "Settled",
@@ -287,10 +287,10 @@ function SummaryCard({
 // ─── GL Preview Badge ─────────────────────────────────────────────────────────
 function GLPreviewBadge({ dvNo, amount, category }) {
   return (
-    <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50 p-3">
+    <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
       <div className="flex items-center gap-1.5 mb-2">
         <Icon.Ledger />
-        <p className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">
+        <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
           Auto General Ledger Entry Preview
         </p>
       </div>
@@ -315,7 +315,7 @@ function GLPreviewBadge({ dvNo, amount, category }) {
         ].map((line) => (
           <div
             key={line.type}
-            className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-indigo-100"
+            className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-emerald-100"
           >
             <div className="flex items-center gap-2">
               <span className={`text-[10px] font-black w-5 ${line.color}`}>
@@ -336,7 +336,7 @@ function GLPreviewBadge({ dvNo, amount, category }) {
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-indigo-500 mt-2 italic">
+      <p className="text-[10px] text-emerald-500 mt-2 italic">
         These 2 entries will be written to{" "}
         <span className="font-bold">fin_general_ledger</span> automatically on
         release.
@@ -479,15 +479,15 @@ function DetailModal({ row, onClose, onRelease }) {
 
           {/* Driver payout badge */}
           {row.payoutRequestId && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 flex items-start gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 text-base leading-none">
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex items-start gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 text-base leading-none">
                 🏧
               </div>
               <div>
-                <p className="text-xs font-bold text-indigo-700 mb-0.5">
+                <p className="text-xs font-bold text-emerald-700 mb-0.5">
                   Driver Payout Request
                 </p>
-                <p className="text-[11px] text-indigo-600 leading-relaxed">
+                <p className="text-[11px] text-emerald-600 leading-relaxed">
                   Payout Ref:{" "}
                   <span className="font-mono font-semibold">
                     {row.payoutReferenceNo ?? "—"}
@@ -497,12 +497,12 @@ function DetailModal({ row, onClose, onRelease }) {
                     {row.payoutMethod ?? row.paymentMethod}
                   </span>{" "}
                   · Net:{" "}
-                  <span className="font-semibold text-indigo-800">
+                  <span className="font-semibold text-emerald-800">
                     {formatCurrency(row.payoutNetAmount)}
                   </span>
                 </p>
                 {row.payoutAccountNumber && (
-                  <p className="text-[11px] text-indigo-500 mt-0.5">
+                  <p className="text-[11px] text-emerald-500 mt-0.5">
                     Account: {row.payoutAccountNumber}
                   </p>
                 )}
@@ -1111,8 +1111,8 @@ function Disbursement() {
           label="Total Released"
           value={formatCurrency(stats.totalReleased)}
           icon={Icon.Ledger}
-          colorClass="border-indigo-200"
-          iconBg="bg-indigo-100 text-indigo-600"
+          colorClass="border-emerald-200"
+          iconBg="bg-emerald-100 text-emerald-600"
           sub="GL auto double-entry posted"
         />
       </div>
@@ -1400,7 +1400,7 @@ function Disbursement() {
                   deduct from budget, and automatically post a{" "}
                   <strong>double-entry</strong> to the General Ledger.
                   {selected.payoutRequestId && (
-                    <span className="block mt-1.5 text-indigo-600 font-medium">
+                    <span className="block mt-1.5 text-emerald-600 font-medium">
                       🏧 This is a driver payout — the payout request will be
                       marked <strong>Approved</strong> and the driver's wallet
                       balance will be updated.
@@ -1592,10 +1592,10 @@ function Disbursement() {
                 </div>
 
                 {/* GL confirmation */}
-                <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Icon.Ledger />
-                    <p className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">
+                    <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
                       General Ledger Posted
                     </p>
                   </div>
@@ -1618,7 +1618,7 @@ function Disbursement() {
                     ].map((line) => (
                       <div
                         key={line.type}
-                        className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-indigo-100"
+                        className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-emerald-100"
                       >
                         <div className="flex items-center gap-2">
                           <span

@@ -45,7 +45,7 @@ const UtilizationBar = ({ actual, committed, limit }) => {
           style={{ width: `${committedPct}%` }}
         />
         <div
-          className={`absolute inset-y-0 left-0 rounded-full ${isOver ? "bg-red-500" : "bg-indigo-500"}`}
+          className={`absolute inset-y-0 left-0 rounded-full ${isOver ? "bg-red-500" : "bg-emerald-500"}`}
           style={{ width: `${actualPct}%` }}
         />
       </div>
@@ -92,7 +92,7 @@ const EnterpriseCalendar = ({ requests, allocatedDates, depletedDates }) => {
     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
       <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100 flex items-center justify-center">
+          <div className="p-3 bg-emerald-600 rounded-2xl text-white shadow-lg shadow-emerald-100 flex items-center justify-center">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
           </div>
           <div>
@@ -101,9 +101,9 @@ const EnterpriseCalendar = ({ requests, allocatedDates, depletedDates }) => {
           </div>
         </div>
         <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm">
-          <button onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-2 hover:bg-slate-50 rounded-xl text-indigo-600 transition-colors">◄</button>
+          <button onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} className="p-2 hover:bg-slate-50 rounded-xl text-emerald-600 transition-colors">◄</button>
           <span className="text-xs font-black text-slate-900 px-3 min-w-[130px] text-center uppercase tracking-tighter">{monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
-          <button onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-2 hover:bg-slate-50 rounded-xl text-indigo-600 transition-colors">►</button>
+          <button onClick={() => setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} className="p-2 hover:bg-slate-50 rounded-xl text-emerald-600 transition-colors">►</button>
         </div>
       </div>
       
@@ -124,8 +124,8 @@ const EnterpriseCalendar = ({ requests, allocatedDates, depletedDates }) => {
           const isDepleted = !!fullKey && !!depletedDates?.has?.(fullKey);
 
           return (
-            <div key={d} className={`relative min-h-[60px] border border-slate-100 rounded-2xl p-2 transition-all hover:border-slate-300 hover:bg-slate-50 group cursor-default ${isToday ? 'bg-indigo-50/60 border-indigo-300 ring-4 ring-indigo-50' : ''}`}>
-              <span className={`text-xs font-black ${isToday ? 'text-indigo-700' : 'text-gray-400'}`}>{d}</span>
+            <div key={d} className={`relative min-h-[60px] border border-slate-100 rounded-2xl p-2 transition-all hover:border-slate-300 hover:bg-slate-50 group cursor-default ${isToday ? 'bg-emerald-50/60 border-emerald-300 ring-4 ring-emerald-50' : ''}`}>
+              <span className={`text-xs font-black ${isToday ? 'text-emerald-700' : 'text-gray-400'}`}>{d}</span>
               <div className="mt-2 flex flex-wrap gap-1">
                 {dayReqs.slice(0, 4).map((req, idx) => (
                   <div key={idx} className={`h-2 w-2 rounded-full shadow-sm ${req.status === 'Approved' ? 'bg-emerald-500' : req.status === 'Pending' ? 'bg-amber-400' : 'bg-red-400'}`} title={req.categoryName} />
@@ -134,7 +134,7 @@ const EnterpriseCalendar = ({ requests, allocatedDates, depletedDates }) => {
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {isAllocated && (
-                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-blue-50 text-blue-700 border border-blue-100">
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100">
                     Allocated
                   </span>
                 )}
@@ -144,7 +144,7 @@ const EnterpriseCalendar = ({ requests, allocatedDates, depletedDates }) => {
                   </span>
                 )}
                 {isRefresh && (
-                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black bg-emerald-50 text-emerald-700 border border-emerald-100">
                     Refresh
                   </span>
                 )}
@@ -179,7 +179,7 @@ const YearlyRequestFrequencyGraph = ({ data, onOpenBreakdown }) => {
         <button
           type="button"
           onClick={onOpenBreakdown}
-          className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold hover:bg-indigo-100 transition-colors shrink-0"
+          className="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition-colors shrink-0"
         >
           View Breakdown
         </button>
@@ -197,7 +197,7 @@ const YearlyRequestFrequencyGraph = ({ data, onOpenBreakdown }) => {
             <XAxis dataKey="label" tick={{ fontSize: 10 }} />
             <YAxis tick={{ fontSize: 10 }} allowDecimals={false} domain={[0, Math.max(1, max)]} />
             <Tooltip />
-            <Line type="monotone" dataKey="count" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -1071,10 +1071,10 @@ function BudgetManagement() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold text-gray-900 mb-1 tracking-tight">
+          <h1 className="text-2xl md:text-3xl font-semibold text-slate-900 mb-1 tracking-tight">
             Budget Management
           </h1>
-          <p className="text-gray-500 text-sm">
+          <p className="text-slate-500 text-sm">
             TNVS Financial Budget Control · Committed vs Actual · Variance
             Analysis
           </p>
@@ -1083,7 +1083,7 @@ function BudgetManagement() {
         {/* ── Set Budget Limits button ── */}
         <button
           onClick={handleOpenBudgetSetup}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm shrink-0"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm shrink-0"
         >
           <svg
             className="w-4 h-4"
@@ -1127,7 +1127,7 @@ function BudgetManagement() {
             label: "Available Balance",
             value: `${totalAvailable < 0 ? "−" : ""}₱${fmt(Math.abs(totalAvailable))}${totalAvailable < 0 ? " OVER" : ""}`,
             sub: "Allocated − Spent − Committed",
-            color: totalAvailable < 0 ? "text-red-600" : "text-indigo-600",
+            color: totalAvailable < 0 ? "text-red-600" : "text-emerald-600",
           },
         ].map((kpi) => (
           <div
@@ -1167,12 +1167,12 @@ function BudgetManagement() {
               <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200">
                 <p className="text-[10px] font-bold text-emerald-500 uppercase">Current Monthly Revenue</p>
                 <p className="text-xl font-black text-slate-900 tabular-nums">₱{fmt(metrics?.monthlyRevenue)}</p>
-                <p className="text-[11px] text-emerald-600 mt-1">Allowed budget max (80%): ₱{fmt(num(metrics?.monthlyRevenue) * 0.8)}</p>
+                <p className="text-[11px] text-slate-500 mt-1">Allowed budget max (80%): ₱{fmt(num(metrics?.monthlyRevenue) * 0.8)}</p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200">
                 <p className="text-[10px] font-bold text-emerald-500 uppercase">Current Year Revenue</p>
                 <p className="text-xl font-black text-slate-900 tabular-nums">₱{fmt(metrics?.yearlyRevenue)}</p>
-                <p className="text-[11px] text-emerald-600 mt-1">Allowed yearly max (80%): ₱{fmt(num(metrics?.yearlyRevenue) * 0.8)}</p>
+                <p className="text-[11px] text-slate-500 mt-1">Allowed yearly max (80%): ₱{fmt(num(metrics?.yearlyRevenue) * 0.8)}</p>
               </div>
               <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200">
                 <p className="text-[10px] font-bold text-slate-500 uppercase">Current Available Budget</p>
@@ -1194,15 +1194,15 @@ function BudgetManagement() {
 
       <div className="flex flex-col gap-8">
         {/* ── Budget Requests ─────────────────────────────────────────────── */}
-        <div className="w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
+        <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           {/* Section header + source tabs */}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-gray-900">
+              <h2 className="text-sm font-semibold text-slate-900">
                 Budget Requests
               </h2>
               {/* Operational | HR tab switcher */}
-              <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+              <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
                 {[
                   {
                     key: "operational",
@@ -1220,8 +1220,8 @@ function BudgetManagement() {
                     onClick={() => setRequestsTab(tab.key)}
                     className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
                       requestsTab === tab.key
-                        ? "bg-white text-gray-900 shadow-sm"
-                        : "text-gray-500 hover:text-gray-700"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
                     {tab.label}
@@ -1236,7 +1236,7 @@ function BudgetManagement() {
             </div>
 
             {/* Status filter tabs — change based on active source tab */}
-            <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+            <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
               {["Pending", "Approved", "Rejected", "All"].map((tab) => {
                 const counts =
                   requestsTab === "hr" ? hrStatusCounts : statusCounts;
@@ -1248,7 +1248,7 @@ function BudgetManagement() {
                   <button
                     key={tab}
                     onClick={() => setActive(tab)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${active === tab ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${active === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                   >
                     {tab}
                     {tab !== "All" && counts[tab] > 0 && (
@@ -1315,12 +1315,12 @@ function BudgetManagement() {
                           request.status === "Pending"
                             ? willExceed
                               ? "cursor-pointer border-red-200 hover:border-red-300"
-                              : "cursor-pointer border-gray-100 hover:border-blue-300 hover:shadow-[0_4px_20px_rgba(59,130,246,0.12)]"
+                              : "cursor-pointer border-gray-100 hover:border-emerald-300 hover:shadow-[0_4px_20px_rgba(16,185,129,0.12)]"
                             : "opacity-70 cursor-default border-gray-100"
                         }`}
                       >
                         <div className="flex justify-between items-start mb-2">
-                          <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">
+                          <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">
                             {request.poReference}
                           </p>
                           <StatusBadge status={request.status} />
@@ -1351,7 +1351,7 @@ function BudgetManagement() {
                           </p>
                         )}
                         {!willExceed && request.status === "Pending" && (
-                          <p className="text-[10px] text-blue-500 mt-2 font-medium">
+                          <p className="text-[10px] text-emerald-500 mt-2 font-medium">
                             Click to review →
                           </p>
                         )}
@@ -1400,12 +1400,12 @@ function BudgetManagement() {
                       }
                       className={`rounded-xl border bg-white p-4 shadow-[0_4px_16px_rgba(0,0,0,0.04)] transition-all ${
                         request.status === "Pending"
-                          ? "cursor-pointer border-purple-100 hover:border-purple-300 hover:shadow-[0_4px_20px_rgba(168,85,247,0.12)]"
+                          ? "cursor-pointer border-emerald-100 hover:border-emerald-300 hover:shadow-[0_4px_20px_rgba(16,185,129,0.12)]"
                           : "opacity-70 cursor-default border-gray-100"
                       }`}
                     >
                       <div className="flex justify-between items-start mb-2">
-                        <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wide bg-purple-50 px-2 py-0.5 rounded-full">
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide bg-emerald-50 px-2 py-0.5 rounded-full">
                           HR Training
                         </span>
                         <StatusBadge status={request.status} />
@@ -1425,7 +1425,7 @@ function BudgetManagement() {
                         </p>
                       )}
                       {request.status === "Pending" && (
-                        <p className="text-[10px] text-purple-500 mt-2 font-medium">
+                        <p className="text-[10px] text-emerald-500 mt-2 font-medium">
                           Click to review →
                         </p>
                       )}
@@ -1443,12 +1443,12 @@ function BudgetManagement() {
         </div>
 
         {/* ── Department Budget Overview ───────────────────────────────────── */}
-        <div className="w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
+        <div className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-900">
+            <h2 className="text-sm font-semibold text-slate-900">
               Department Budget Overview
             </h2>
-            <div className="flex items-center gap-4 text-[10px] text-gray-500">
+            <div className="flex items-center gap-4 text-[10px] text-slate-500">
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />{" "}
                 Actual Spent
@@ -1465,20 +1465,17 @@ function BudgetManagement() {
           {isLoading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
-                <div
-                  key={i}
-                  className="h-10 rounded bg-gray-100 animate-pulse"
-                />
+                <div key={i} className="h-10 rounded bg-slate-100 animate-pulse" />
               ))}
             </div>
           ) : rows.length === 0 ? (
             <div className="py-10 text-center">
-              <p className="text-sm text-gray-400 mb-3">
+              <p className="text-sm text-slate-400 mb-3">
                 No budget data available.
               </p>
               <button
                 onClick={handleOpenBudgetSetup}
-                className="px-4 py-2 rounded-xl bg-blue-50 text-blue-700 text-sm font-medium hover:bg-blue-100 transition-colors"
+                className="px-4 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition-colors"
               >
                 → Set Budget Limits to get started
               </button>
@@ -1486,7 +1483,7 @@ function BudgetManagement() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50">
+                <thead className="bg-slate-50">
                   <tr>
                     {[
                       "Department",
@@ -1500,42 +1497,42 @@ function BudgetManagement() {
                     ].map((h) => (
                       <th
                         key={h}
-                        className={`px-4 py-3 text-xs font-semibold text-gray-600 uppercase ${["Allocated", "Actual Spent", "Committed", "Available"].includes(h) ? "text-right" : "text-left"}`}
+                        className={`px-4 py-3 text-xs font-semibold text-slate-600 uppercase ${["Allocated", "Actual Spent", "Committed", "Available"].includes(h) ? "text-right" : "text-left"}`}
                       >
                         {h}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-slate-200">
                   {rows.map((row) => {
                     const available = row.limit - row.actual - row.committed;
                     const isOverBudget = available < 0;
                     return (
                       <tr
                         key={row.budgetId}
-                        className="hover:bg-gray-50 transition-colors"
+                        className="hover:bg-slate-50 transition-colors"
                       >
-                        <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
+                        <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">
                           {row.department}
                         </td>
-                        <td className="px-4 py-3 text-gray-700">{row.name}</td>
+                        <td className="px-4 py-3 text-slate-700">{row.name}</td>
                         <td className="px-4 py-3">
-                          <span className="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full uppercase">
+                          <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full uppercase">
                             {row.code}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                        <td className="px-4 py-3 text-right tabular-nums text-slate-700">
                           ₱{fmt(row.limit)}
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                        <td className="px-4 py-3 text-right tabular-nums text-slate-700">
                           ₱{fmt(row.actual)}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-amber-600 font-medium">
                           ₱{fmt(row.committed)}
                         </td>
                         <td
-                          className={`px-4 py-3 text-right font-semibold tabular-nums ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}
+                        className={`px-4 py-3 text-right font-semibold tabular-nums ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}
                         >
                           {isOverBudget ? "−" : ""}₱{fmt(Math.abs(available))}
                           {isOverBudget && (
@@ -1584,12 +1581,12 @@ function BudgetManagement() {
               className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
             >
               {/* Modal header */}
-              <div className="flex items-start justify-between p-6 pb-4 border-b border-gray-100">
+              <div className="flex items-start justify-between p-6 pb-4 border-b border-slate-200">
                 <div>
-                  <h2 className="text-base font-semibold text-gray-900">
+                  <h2 className="text-base font-semibold text-slate-900">
                     Set Budget Limits
                   </h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     Define the approved spending ceiling per department for the
                     selected period. Actual spend and committed amounts are not
                     affected.
@@ -1685,7 +1682,7 @@ function BudgetManagement() {
                                     e.target.value,
                                   )
                                 }
-                                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-center tabular-nums outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-center tabular-nums outline-none focus:ring-2 focus:ring-emerald-100 bg-white"
                                 min={currentYear}
                                 max={2099}
                               />
@@ -1705,7 +1702,7 @@ function BudgetManagement() {
                                     e.target.value,
                                   )
                                 }
-                                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-center tabular-nums outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                                className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-center tabular-nums outline-none focus:ring-2 focus:ring-emerald-100 bg-white"
                                 min={1}
                                 max={12}
                               />
@@ -1731,7 +1728,7 @@ function BudgetManagement() {
                                     )
                                   }
                                   placeholder="0"
-                                  className="w-full rounded-lg border border-gray-200 pl-6 pr-2 py-1.5 text-sm tabular-nums outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                                  className="w-full rounded-lg border border-gray-200 pl-6 pr-2 py-1.5 text-sm tabular-nums outline-none focus:ring-2 focus:ring-emerald-100 bg-white"
                                   min={0}
                                 />
                               </div>
@@ -1747,7 +1744,7 @@ function BudgetManagement() {
                                 updateDraft(cat.id, "notes", e.target.value)
                               }
                               placeholder="Optional note (e.g. Q1 allocation, board-approved)"
-                              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                              className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 outline-none focus:ring-2 focus:ring-emerald-100 bg-white"
                             />
                           </div>
                         </div>
@@ -1760,16 +1757,16 @@ function BudgetManagement() {
               {/* Modal footer — live total + save */}
               <div className="p-6 pt-4 border-t border-gray-100">
                 {/* Live total preview */}
-                <div className="flex items-center justify-between mb-4 p-3 bg-blue-50 rounded-xl">
+                <div className="flex items-center justify-between mb-4 p-3 bg-emerald-50 rounded-xl">
                   <div>
-                    <p className="text-[10px] uppercase font-bold text-blue-400">
+                    <p className="text-[10px] uppercase font-bold text-emerald-500">
                       Total Budget Being Set
                     </p>
-                    <p className="text-lg font-bold text-blue-700 tabular-nums">
+                    <p className="text-lg font-bold text-emerald-700 tabular-nums">
                       ₱{fmt(draftTotal)}
                     </p>
                   </div>
-                  <p className="text-[11px] text-blue-400 text-right max-w-[200px]">
+                  <p className="text-[11px] text-emerald-500 text-right max-w-[200px]">
                     This is the combined ceiling across all{" "}
                     {allCategories.length} departments.
                   </p>
@@ -1786,7 +1783,7 @@ function BudgetManagement() {
                   <button
                     onClick={handleSaveBudgetLimits}
                     disabled={setupSaving || allCategories.length === 0}
-                    className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
+                    className="px-5 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
                   >
                     {setupSaving ? (
                       <>
@@ -1857,25 +1854,25 @@ function BudgetManagement() {
                 ) : (
                   <div className="rounded-2xl border border-gray-100 overflow-hidden">
                     <table className="w-full text-sm">
-                      <thead className="bg-emerald-50 border-b border-emerald-100">
+                      <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
                             Department
                           </th>
-                          <th className="px-4 py-3 text-right text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">
                             Total
                           </th>
-                          <th className="px-4 py-3 text-right text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">
                             Operational
                           </th>
-                          <th className="px-4 py-3 text-right text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">
                             HR
                           </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {departmentFrequency.map((r) => (
-                          <tr key={r.department} className="hover:bg-emerald-50/30 transition-colors">
+                          <tr key={r.department} className="hover:bg-slate-50 transition-colors">
                             <td className="px-4 py-3 font-medium text-gray-900">
                               {r.department}
                             </td>
@@ -1935,12 +1932,12 @@ function BudgetManagement() {
                     Review Budget Request
                   </h2>
                   {selectedRequest._source === "hr" ? (
-                    <p className="text-xs text-purple-600 font-bold mt-0.5 uppercase tracking-wide flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block" />
+                    <p className="text-xs text-emerald-600 font-bold mt-0.5 uppercase tracking-wide flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                       HR Training Request
                     </p>
                   ) : (
-                    <p className="text-xs text-blue-600 font-bold mt-0.5 uppercase tracking-wide">
+                    <p className="text-xs text-emerald-600 font-bold mt-0.5 uppercase tracking-wide">
                       {selectedRequest.poReference}
                     </p>
                   )}
@@ -2008,7 +2005,7 @@ function BudgetManagement() {
                     Budget Status
                   </p>
                   {selectedRequest._source === "hr" ? (
-                    <p className="text-sm text-purple-600 font-medium">
+                    <p className="text-sm text-emerald-600 font-medium">
                       HR Training — no budget limit set
                     </p>
                   ) : (
@@ -2066,7 +2063,7 @@ function BudgetManagement() {
                 <textarea
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
-                  className={`w-full rounded-xl border p-3 text-sm min-h-[80px] outline-none transition-all resize-none ${decision === "reject" ? "border-red-200 focus:ring-2 focus:ring-red-100" : "border-gray-200 focus:ring-2 focus:ring-blue-100"}`}
+                  className={`w-full rounded-xl border p-3 text-sm min-h-[80px] outline-none transition-all resize-none ${decision === "reject" ? "border-red-200 focus:ring-2 focus:ring-red-100" : "border-gray-200 focus:ring-2 focus:ring-emerald-100"}`}
                   placeholder={
                     decision === "reject"
                       ? "Required: reason for rejection…"

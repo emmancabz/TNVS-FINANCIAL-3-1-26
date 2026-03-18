@@ -93,7 +93,7 @@ function Notifications({ isOpen, onClose, onOpen }) {
                   className="p-4 border-b border-gray-50 last:border-0 hover:bg-gray-50/80 cursor-pointer transition-colors duration-150"
                 >
                   <div className="flex items-start gap-3">
-                    <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${notif.is_read ? 'bg-transparent' : 'bg-blue-500'}`} />
+                    <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${notif.is_read ? 'bg-transparent' : 'bg-emerald-500'}`} />
                     <div>
                       <p className="text-sm text-gray-900 font-medium">{notif.content || notif.message}</p>
                       <p className="text-[10px] text-gray-400 mt-1 uppercase font-semibold tracking-wider">
@@ -439,13 +439,6 @@ function Header() {
                 }}
               >
                 <div className="p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status</span>
-                    <span className="text-xs font-medium text-[#2ecc71]">Active</span>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    Active for <span className="font-mono font-medium text-gray-700">{activeTime}</span>
-                  </p>
                   <div className="h-px bg-gray-100" />
                   <button
                     type="button"

@@ -12,14 +12,14 @@ export default function Shortcuts() {
   // Core Finance Actions - Base sa existing routes mo
   const quickActions = [
     { label: 'New Disbursement', path: '/disbursement', icon: Wallet, color: 'text-rose-600', bg: 'bg-rose-50' },
-    { label: 'Record Collection', path: '/collections', icon: CreditCard, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Record Collection', path: '/collections', icon: CreditCard, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Manage Payables', path: '/accounts-payable', icon: FileText, color: 'text-orange-600', bg: 'bg-orange-50' },
     { label: 'Process Receivables', path: '/accounts-receivable', icon: Receipt, color: 'text-emerald-600', bg: 'bg-emerald-50' },
   ];
 
   // System Utilities - Flexing the Header icons
   const systemTools = [
-    { label: 'Security Overview', icon: Shield, color: 'text-indigo-600', bg: 'bg-indigo-50', desc: 'Check system permissions.' },
+    { label: 'Security Overview', icon: Shield, color: 'text-emerald-600', bg: 'bg-emerald-50', desc: 'Check system permissions.' },
     { label: 'Export Documents', icon: Download, color: 'text-slate-600', bg: 'bg-slate-50', desc: 'Download PDF/Excel reports.' },
     { label: 'Audit Log History', icon: History, color: 'text-amber-600', bg: 'bg-amber-50', desc: 'View recent system activities.' },
     { label: 'File Manager', icon: Upload, color: 'text-cyan-600', bg: 'bg-cyan-50', desc: 'Attach financial documents.' },

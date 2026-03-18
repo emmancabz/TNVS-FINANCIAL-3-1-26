@@ -109,7 +109,7 @@ function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   className={`w-full pl-11 pr-4 py-3.5 rounded-xl border text-sm outline-none transition-all placeholder-gray-400 ${
                     darkMode
-                      ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30'
+                      ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30'
                       : 'bg-white border-gray-200 text-gray-900 focus:border-gray-300 focus:ring-2 focus:ring-gray-200'
                   }`}
                   placeholder="Enter your email"
@@ -131,7 +131,7 @@ function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   className={`w-full pl-11 pr-12 py-3.5 rounded-xl border text-sm outline-none transition-all placeholder-gray-400 ${
                     darkMode
-                      ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30'
+                      ? 'bg-gray-700 border-gray-600 text-gray-100 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30'
                       : 'bg-white border-gray-200 text-gray-900 focus:border-gray-300 focus:ring-2 focus:ring-gray-200'
                   }`}
                   placeholder="Enter your password"

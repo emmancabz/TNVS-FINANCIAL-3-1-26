@@ -4,7 +4,7 @@ import type {
   FinAccountsPayableInsert,
   FinAccountsPayableUpdate,
 } from '../types/database'
-import { logAudit } from './auditLogService'
+import { logAudit } from './Auditlogservice'
 
 export async function fetchAccountsPayable(): Promise<FinAccountsPayable[]> {
   const { data, error } = await supabase

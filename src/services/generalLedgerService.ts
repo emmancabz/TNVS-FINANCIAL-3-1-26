@@ -4,7 +4,7 @@ import type {
   FinGeneralLedgerInsert,
   FinGeneralLedgerUpdate,
 } from '../types/database'
-import { logAudit } from './auditLogService'
+import { logAudit } from './Auditlogservice'
 
 export type UnifiedLedgerEntry = {
   id: string
@@ -45,7 +45,8 @@ export async function fetchUnifiedLedgerEntries(params: {
       .select('id, amount, payment_timestamp, reference_no, driver_id, core1_drivers(driver_name)')
       .gte('payment_timestamp', params.fromISO)
       .lt('payment_timestamp', params.toISO)
-      .eq('status', 'PAID')
+      // FIX: Changed to ilike to prevent case-sensitivity issues
+      .ilike('status', 'paid') 
       .order('payment_timestamp', { ascending: false }),
     supabase
       .from('fin_disbursement')
@@ -68,12 +69,15 @@ export async function fetchUnifiedLedgerEntries(params: {
       )
       .gte('disbursed_at', params.fromISO)
       .lt('disbursed_at', params.toISO)
-      .eq('status', 'RELEASED')
+      // FIX: Changed from .eq('status', 'RELEASED') to .ilike('status', 'released')
+      .ilike('status', 'released') 
       .order('disbursed_at', { ascending: false }),
   ])
 
   if (payErr) throw payErr
   if (disbErr) throw disbErr
+
+  // ... (keep the rest of the function exactly the same)
 
   const debitEntries: UnifiedLedgerEntry[] = (payments ?? []).map((p: any) => {
     const amt = num(p?.amount, 0)

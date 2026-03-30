@@ -1,6 +1,6 @@
 import { supabase } from '../../database/supabase'
 import type { FinReceiptHistory, FinReceiptHistoryInsert } from '../types/database'
-import { logAudit } from './auditLogService'
+import { logAudit } from './Auditlogservice'
 
 export async function fetchReceiptHistory(): Promise<FinReceiptHistory[]> {
   const { data, error } = await supabase

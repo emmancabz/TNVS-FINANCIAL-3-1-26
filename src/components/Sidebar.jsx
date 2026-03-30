@@ -9,6 +9,8 @@ import {
   DollarSign,
   FileText,
   Receipt,
+  BrainCircuit,
+  ShieldCheck,
 } from 'lucide-react'
 
 let logoUrl
@@ -21,12 +23,14 @@ try {
 const SIDEBAR_WIDTH_EXPANDED = 260
 const SIDEBAR_WIDTH_COLLAPSED = 72
 
+// Dinagdag natin ang AI Agent category sa dulo
 const categories = [
   {
     label: 'Main',
     items: [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/message', label: 'Message', icon: MessageSquare },
+      { href: '/audit-trail', label: 'Audit Trail', icon: ShieldCheck },
     ],
   },
   {
@@ -43,6 +47,12 @@ const categories = [
     items: [
       { href: '/accounts-payable', label: 'Accounts Payable', icon: FileText },
       { href: '/accounts-receivable', label: 'Accounts Receivable', icon: Receipt },
+    ],
+  },
+  {
+    label: 'AI Agent',
+    items: [
+      { href: '/financial-ai', label: 'Cabwise', icon: BrainCircuit },
     ],
   },
 ]

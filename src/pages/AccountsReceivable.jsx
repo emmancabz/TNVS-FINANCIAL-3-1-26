@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Bell, ChevronLeft, ChevronRight, Phone, Mail, MessageCircle } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchAccountsReceivable } from '../services/accountsReceivableService'
 import { fetchTodayBoundaryPayments } from '../services/boundaryService'
+import { supabase } from '../../database/supabase'
 
 const getInitials = (name) =>
   name
@@ -37,42 +39,52 @@ const maskName = (fullName) => {
 }
 
 function AccountsReceivable() {
-  const [rows, setRows] = useState([])
-  const [isLoadingAR, setIsLoadingAR] = useState(true)
-  const [isLoadingToday, setIsLoadingToday] = useState(true)
-  const [arError, setArError] = useState('')
-  const [todayError, setTodayError] = useState('')
-  const [paidTodayIds, setPaidTodayIds] = useState([])
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  
+  // UI States
   const [activeRemindId, setActiveRemindId] = useState(null)
   const [todayPage, setTodayPage] = useState(1)
-  const navigate = useNavigate()
   const rowsPerPage = 10
 
-  const load = async () => {
-    setIsLoadingAR(true)
-    setIsLoadingToday(true)
-    setArError('')
-    setTodayError('')
-    try {
-      const [data, todayPayments] = await Promise.all([fetchAccountsReceivable(), fetchTodayBoundaryPayments()])
-      setRows(data)
+  // 1. REACT QUERY: Load Accounts Receivable & Today's Payments
+  const { data: arData, isLoading, error: queryError } = useQuery({
+    queryKey: ['accountsReceivable'],
+    queryFn: async () => {
+      const [data, todayPayments] = await Promise.all([
+        fetchAccountsReceivable(), 
+        fetchTodayBoundaryPayments()
+      ])
+      
       const ids = Array.from(
         new Set((todayPayments || []).map((p) => Number(p?.driver_id)).filter((x) => Number.isFinite(x)))
       )
-      setPaidTodayIds(ids)
-    } catch (err) {
-      const msg = err?.message || String(err)
-      setArError(msg)
-    } finally {
-      setIsLoadingAR(false)
-      setIsLoadingToday(false)
+      
+      return { rows: data || [], paidTodayIds: ids }
     }
-  }
+  })
 
+  const rows = arData?.rows || []
+  const paidTodayIds = arData?.paidTodayIds || []
+  const arError = queryError?.message || ''
+
+  // 2. REALTIME SUBSCRIPTION
   useEffect(() => {
-    load()
-  }, [])
+    const channel = supabase.channel('ar-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'core1_boundary_payments' }, () => {
+        // May bagong bayad, i-refresh palihim ang Accounts Receivable table!
+        queryClient.invalidateQueries({ queryKey: ['accountsReceivable'] })
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'core1_accounts_receivable' }, () => {
+        // Nagbago ang mismong AR records
+        queryClient.invalidateQueries({ queryKey: ['accountsReceivable'] })
+      })
+      .subscribe()
 
+    return () => supabase.removeChannel(channel)
+  }, [queryClient])
+
+  // 3. Data Processing
   const paidTodaySet = useMemo(() => new Set(paidTodayIds), [paidTodayIds])
 
   const lateRows = useMemo(
@@ -90,6 +102,7 @@ function AccountsReceivable() {
     setTodayPage(1)
   }, [todayUnpaidRows.length])
 
+  // Pagination Logic
   const todayTotalPages = Math.max(1, Math.ceil(todayUnpaidRows.length / rowsPerPage))
   const todayPageSafe = clamp(todayPage, 1, todayTotalPages)
   const todayStart = (todayPageSafe - 1) * rowsPerPage
@@ -102,12 +115,11 @@ function AccountsReceivable() {
     year: 'numeric',
   })
 
+  // Reporting Logic (Naka-connect sa Message module)
   const handleReportToAdmin = (row) => {
     const msg = [
-      '#general',
-      '',
-      'Accounts Receivable: 2+ days late',
-      '',
+      'Accounts Receivable:',
+      row.days_late_text || '2+ days late',
       `Driver: ${maskName(row?.driver_name)}`,
       `License: ${row.license_number ?? '—'}`,
       `Phone: ${row.phone ?? '—'}`,
@@ -118,8 +130,8 @@ function AccountsReceivable() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 lg:p-10">
-      <div className="max-w-7xl mx-auto">
+    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="w-full">
+      <div className="w-full">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1 tracking-tight">Accounts Receivable</h1>
@@ -173,12 +185,12 @@ function AccountsReceivable() {
               <p className="text-sm text-gray-600 mt-0.5">Drivers with missed midnights (days late &gt; 0)</p>
             </div>
             <div className="text-xs font-semibold text-slate-700 bg-white border border-slate-200 px-3 py-1.5 rounded-full">
-              {isLoadingAR ? 'Loading…' : `${lateRows.length} driver(s)`}
+              {isLoading ? 'Loading…' : `${lateRows.length} driver(s)`}
             </div>
           </div>
 
           <div className="p-6">
-            {isLoadingAR && (
+            {isLoading && (
               <div className="h-[760px] overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-3">
                 {Array.from({ length: 10 }).map((_, idx) => (
                   <div key={idx} className="rounded-2xl border border-gray-100 bg-gray-50 h-[92px] animate-pulse" />
@@ -186,11 +198,11 @@ function AccountsReceivable() {
               </div>
             )}
 
-            {!isLoadingAR && arError && (
+            {!isLoading && arError && (
               <div className="h-[200px] flex items-center justify-center text-sm text-red-600">{arError}</div>
             )}
 
-            {!isLoadingAR && !arError && lateRows.length === 0 && (
+            {!isLoading && !arError && lateRows.length === 0 && (
               <div className="h-[200px] flex flex-col items-center justify-center text-center">
                 <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700 font-bold">
                   ✓
@@ -200,7 +212,7 @@ function AccountsReceivable() {
               </div>
             )}
 
-            {!isLoadingAR && !arError && lateRows.length > 0 && (
+            {!isLoading && !arError && lateRows.length > 0 && (
               <div className="h-[760px] overflow-y-auto pr-1">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {lateRows.map((r) => {
@@ -344,7 +356,7 @@ function AccountsReceivable() {
               <p className="text-sm text-gray-600 mt-0.5">Unpaid since 12:00 AM (monitoring only)</p>
             </div>
             <div className="text-xs font-semibold text-slate-700 bg-white border border-slate-200 px-3 py-1.5 rounded-full">
-              {isLoadingAR || isLoadingToday ? 'Loading…' : `${todayUnpaidRows.length} unpaid`}
+              {isLoading ? 'Loading…' : `${todayUnpaidRows.length} unpaid`}
             </div>
           </div>
 
@@ -359,7 +371,7 @@ function AccountsReceivable() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {(isLoadingAR || isLoadingToday) && (
+                {isLoading && (
                   <tr>
                     <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
                       Loading…
@@ -367,15 +379,15 @@ function AccountsReceivable() {
                   </tr>
                 )}
 
-                {!(isLoadingAR || isLoadingToday) && (arError || todayError) && (
+                {!isLoading && arError && (
                   <tr>
                     <td colSpan={4} className="px-6 py-10 text-center text-red-600">
-                      {arError || todayError}
+                      {arError}
                     </td>
                   </tr>
                 )}
 
-                {!(isLoadingAR || isLoadingToday) && !arError && !todayError && todayUnpaidRows.length === 0 && (
+                {!isLoading && !arError && todayUnpaidRows.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-6 py-12 text-center text-slate-700 font-semibold">
                       All drivers have paid for today.
@@ -383,9 +395,8 @@ function AccountsReceivable() {
                   </tr>
                 )}
 
-                {!(isLoadingAR || isLoadingToday) &&
+                {!isLoading &&
                   !arError &&
-                  !todayError &&
                   todayPageRows.map((r) => (
                     <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
@@ -412,7 +423,7 @@ function AccountsReceivable() {
             </table>
           </div>
 
-          {!(isLoadingAR || isLoadingToday) && !arError && !todayError && todayUnpaidRows.length > 0 && (
+          {!isLoading && !arError && todayUnpaidRows.length > 0 && (
             <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
               <p className="text-xs text-slate-500">
                 Page <span className="font-semibold text-slate-800">{todayPageSafe}</span> of{' '}
@@ -440,7 +451,6 @@ function AccountsReceivable() {
           )}
         </div>
       </div>
-
     </motion.div>
   )
 }

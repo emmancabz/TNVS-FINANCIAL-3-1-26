@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../database/supabase";
 
 // ─── Source module config ─────────────────────────────────────────────────────
@@ -389,11 +390,9 @@ function DetailModal({
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 function AccountsPayable() {
-  const [rows, setRows] = useState([]);
-  const [budgets, setBudgets] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState("");
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ category: "" });
   const [budgetWarning, setBudgetWarning] = useState(null);
@@ -407,59 +406,70 @@ function AccountsPayable() {
 
   const today = new Date();
 
-  // ── Load AP records ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    const load = async () => {
-      setIsLoading(true);
-      setError("");
-      try {
-        const { data: apData, error: apErr } = await supabase
-          .from("fin_accounts_payable")
-          .select(
-            `id, ref_no, vendor_name, amount, description, status, category,
-             created_at, due_date, approved_by, approved_at, employee_id,
-             hr_proceedlist ( firstname, lastname )`,
-          )
-          .order("created_at", { ascending: false });
-        if (apErr) throw apErr;
+  // ── 1. REACT QUERY: Load AP Records ──────────────────────────────────────────
+  const { data: apQueryData, isLoading, error: queryErrorObj } = useQuery({
+    queryKey: ['accountsPayable'],
+    queryFn: async () => {
+      const { data: apData, error: apErr } = await supabase
+        .from("fin_accounts_payable")
+        .select(
+          `id, ref_no, vendor_name, amount, description, status, category,
+           created_at, due_date, approved_by, approved_at, employee_id,
+           hr_proceedlist ( firstname, lastname )`,
+        )
+        .order("created_at", { ascending: false });
+      if (apErr) throw apErr;
 
-        const apIds = (apData || [])
-          .map((r) => r?.id)
-          .filter(Boolean);
-        let releasedMap = new Set();
-        if (apIds.length > 0) {
-          const { data: disbursements, error: disbErr } = await supabase
-            .from("fin_disbursement")
-            .select("ap_id, status")
-            .in("ap_id", apIds)
-            .eq("status", "RELEASED");
-          if (disbErr) throw disbErr;
-          (disbursements || []).forEach((d) => {
-            if (d?.ap_id) releasedMap.add(d.ap_id);
-          });
-        }
-
-        const { data: budgetData, error: budgetErr } = await supabase
-          .from("fin_budget_management")
-          .select("id, category, limit_amount, actual_spend");
-        if (budgetErr) throw budgetErr;
-
-        setRows(
-          (apData || []).map((item) => ({
-            ...item,
-            _released: releasedMap.has(item?.id),
-          })),
-        );
-        setBudgets(Array.isArray(budgetData) ? budgetData : []);
-      } catch (err) {
-        setError("Failed to load accounts payable: " + err.message);
-      } finally {
-        setIsLoading(false);
+      const apIds = (apData || [])
+        .map((r) => r?.id)
+        .filter(Boolean);
+      
+      let releasedMap = new Set();
+      if (apIds.length > 0) {
+        const { data: disbursements, error: disbErr } = await supabase
+          .from("fin_disbursement")
+          .select("ap_id, status")
+          .in("ap_id", apIds)
+          .eq("status", "RELEASED");
+        if (disbErr) throw disbErr;
+        (disbursements || []).forEach((d) => {
+          if (d?.ap_id) releasedMap.add(d.ap_id);
+        });
       }
-    };
-    load();
-  }, []);
 
+      const { data: budgetData, error: budgetErr } = await supabase
+        .from("fin_budget_management")
+        .select("id, category, limit_amount, actual_spend");
+      if (budgetErr) throw budgetErr;
+
+      const processedRows = (apData || []).map((item) => ({
+        ...item,
+        _released: releasedMap.has(item?.id),
+      }));
+
+      return { rows: processedRows, budgets: Array.isArray(budgetData) ? budgetData : [] };
+    }
+  });
+
+  const rows = apQueryData?.rows || [];
+  const budgets = apQueryData?.budgets || [];
+  const error = actionError || queryErrorObj?.message || "";
+
+  // ── 2. REALTIME SUBSCRIPTION ────────────────────────────────────────────────
+  useEffect(() => {
+    const channel = supabase.channel('ap-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_accounts_payable' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['accountsPayable'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_disbursement' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['accountsPayable'] });
+      })
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [queryClient]);
+
+  // ── Process & Filter Data ───────────────────────────────────────────────────
   const mappedRows = useMemo(
     () =>
       rows.map((item) => {
@@ -498,6 +508,7 @@ function AccountsPayable() {
     () => mappedRows.filter((r) => approvedStatuses.has(r.status) && !r.isReleased),
     [mappedRows, approvedStatuses],
   );
+  
   const categoryOptions = [
     ...new Set(approvedRows.map((r) => r.category).filter(Boolean)),
   ];
@@ -557,13 +568,15 @@ function AccountsPayable() {
   }, [filteredRows]);
 
   // Logic for Paginated Rows
-  const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
   const paginatedRows = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
     return filteredRows.slice(start, start + rowsPerPage);
   }, [filteredRows, currentPage]);
 
+  // ── Action Handlers ─────────────────────────────────────────────────────────
   const handleApprove = async (row) => {
+    setActionError("");
     const budgetRow = budgets.find((b) => b.category === row.category);
     const available = budgetRow ? budgetRow.limit_amount - budgetRow.actual_spend : null;
     if (available != null && row.amount > available) {
@@ -582,10 +595,11 @@ function AccountsPayable() {
         approved_at: approvedAt,
       }).eq("id", row.id);
       if (upErr) throw upErr;
-      setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, status: "Manager Approved", approved_by: approvedBy, approved_at: approvedAt } : r));
+      
+      queryClient.invalidateQueries({ queryKey: ['accountsPayable'] });
       setDetailRow(null);
     } catch (err) {
-      setError("Failed to approve: " + err.message);
+      setActionError("Failed to approve: " + err.message);
     } finally {
       setActionLoading(false);
     }
@@ -597,6 +611,7 @@ function AccountsPayable() {
   };
 
   const handleConfirmReject = async (row, reason) => {
+    setActionError("");
     setActionLoading(true);
     try {
       const { error: upErr } = await supabase.from("fin_accounts_payable").update({
@@ -604,16 +619,18 @@ function AccountsPayable() {
         description: `${row.description} [Rejected: ${reason}]`,
       }).eq("id", row.id);
       if (upErr) throw upErr;
-      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status: "Rejected" } : r)));
+      
+      queryClient.invalidateQueries({ queryKey: ['accountsPayable'] });
       setRejectTarget(null);
     } catch (err) {
-      setError("Failed to reject: " + err.message);
+      setActionError("Failed to reject: " + err.message);
     } finally {
       setActionLoading(false);
     }
   };
 
   const handlePostToGL = async (row) => {
+    setActionError("");
     setActionLoading(true);
     try {
       const now = new Date().toISOString();
@@ -631,17 +648,18 @@ function AccountsPayable() {
       });
 
       await supabase.from("fin_accounts_payable").update({ status: "Posted to GL" }).eq("id", row.id);
-      setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, status: "Posted to GL" } : r));
+      
+      queryClient.invalidateQueries({ queryKey: ['accountsPayable'] });
       setDetailRow(null);
     } catch (err) {
-      setError("Failed to post to GL: " + err.message);
+      setActionError("Failed to post to GL: " + err.message);
     } finally {
       setActionLoading(false);
     }
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="p-6 md:p-8 lg:p-10">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="w-full">
       <div className="mb-6">
         <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1 tracking-tight">Accounts Payable</h1>
         <p className="text-slate-600 text-sm">Manages approved payments from Procurement, Asset Maintenance, and HR Payroll.</p>
@@ -651,7 +669,7 @@ function AccountsPayable() {
         {error && (
           <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl flex items-center justify-between">
             <span className="flex items-center gap-2"><AlertTriangle className="w-4 h-4" />{error}</span>
-            <button onClick={() => setError("")}><X className="w-4 h-4" /></button>
+            <button onClick={() => setActionError("")}><X className="w-4 h-4" /></button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -746,10 +764,10 @@ function AccountsPayable() {
       <div className="flex items-center justify-between px-2">
         <p className="text-xs text-slate-400 font-medium">Page {currentPage} of {totalPages || 1}</p>
         <div className="flex items-center gap-2">
-          <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 transition-all text-emerald-700">
+          <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 transition-all text-emerald-700">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)} className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 transition-all text-emerald-700">
+          <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} className="p-2 rounded-xl border border-slate-200 bg-white disabled:opacity-30 hover:bg-slate-50 transition-all text-emerald-700">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

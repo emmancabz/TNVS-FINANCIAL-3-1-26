@@ -1,8 +1,12 @@
 import { useEffect, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { jsPDF } from "jspdf";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../database/supabase";
 import { insertReceiptHistory } from "../services/receiptHistoryService";
+import { logAudit } from "../services/Auditlogservice";
+import { insertNotification } from "../services/notificationsService";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const FLOW_LABELS = {
@@ -26,11 +30,14 @@ const FLOW_LABELS = {
     color: "bg-gray-100 text-gray-600 border border-gray-200",
     dot: "bg-gray-400",
   },
+  Voided: {
+    label: "Voided",
+    color: "bg-red-50 text-red-700 border border-red-200",
+    dot: "bg-red-500",
+  },
 };
 
 // Account codes used for double-entry journaling
-// Debit:  5000-XXXX  → Expense account (increases expense)
-// Credit: 1010-CASH  → Cash/Bank account (decreases asset)
 const GL_EXPENSE_ACCOUNT = "5000-EXP";
 const GL_CASH_ACCOUNT = "1010-CASH";
 
@@ -206,21 +213,6 @@ const Icon = {
       <path strokeLinecap="round" d="M12 6v6l4 2" />
     </svg>
   ),
-  TrendingUp: () => (
-    <svg
-      className="w-5 h-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      viewBox="0 0 24 24"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-      />
-    </svg>
-  ),
   Ledger: () => (
     <svg
       className="w-4 h-4"
@@ -249,6 +241,12 @@ const Icon = {
         strokeLinejoin="round"
         d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
       />
+    </svg>
+  ),
+  Ban: () => (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" />
+      <path strokeLinecap="round" d="M4.93 4.93l14.14 14.14" />
     </svg>
   ),
 };
@@ -356,7 +354,7 @@ function DetailModal({ row, onClose, onRelease }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <motion.div
@@ -367,10 +365,9 @@ function DetailModal({ row, onClose, onRelease }) {
         onClick={(e) => e.stopPropagation()}
         className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto"
       >
-        {/* Header */}
-        <div className="bg-gradient-to-r from-slate-800 to-slate-700 px-6 py-5 flex items-start justify-between sticky top-0 z-10">
+        <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 px-6 py-5 flex items-start justify-between sticky top-0 z-10">
           <div>
-            <p className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-1">
+            <p className="text-emerald-100 text-xs font-medium uppercase tracking-wider mb-1">
               Disbursement Voucher
             </p>
             <h2 className="text-white text-lg font-bold font-mono">
@@ -422,55 +419,62 @@ function DetailModal({ row, onClose, onRelease }) {
             </div>
           </div>
 
-          {/* Workflow timeline */}
+          {/* Workflow timeline - Perfect alignment fix */}
           <div>
             <p className="text-[10px] uppercase font-bold text-gray-400 mb-2 tracking-wider">
               Workflow Progress
             </p>
-            <div className="relative flex items-start gap-0">
+            <div className="flex w-full justify-between mt-4">
               {[
                 "Budget Approved",
                 "Pending Disbursement",
-                "Finance Releases",
                 "Released & GL Posted",
-              ].map((step, i) => {
+              ].map((step, i, arr) => {
                 const isActive =
-                  (step === "Pending Disbursement" &&
-                    row.status === "Pending Disbursement") ||
-                  (step === "Released & GL Posted" &&
-                    row.status === "Released");
+                  step === "Pending Disbursement" &&
+                  row.status === "Pending Disbursement";
                 const isPast =
-                  step === "Budget Approved" ||
-                  (step === "Pending Disbursement" &&
-                    row.status === "Released") ||
-                  (step === "Finance Releases" && row.status === "Released");
+                  step === "Budget Approved" || row.status === "Released";
+                const isLast = i === arr.length - 1;
+
                 return (
-                  <div key={step} className="flex items-center gap-0 flex-1">
-                    <div className="flex flex-col items-center flex-1">
+                  <div key={step} className="relative flex flex-col items-center flex-1">
+                    {/* Connecting Line */}
+                    {!isLast && (
                       <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center border-2 text-[8px] font-black shrink-0
+                        className={`absolute top-[11px] left-[50%] w-full h-[2px] z-0 ${
+                          isPast ? "bg-emerald-400" : "bg-gray-200"
+                        }`}
+                      />
+                    )}
+                    {/* Circle */}
+                    <div
+                      className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center border-2 text-[10px] font-black shrink-0 bg-white
+                      ${
+                        isPast
+                          ? "border-emerald-500 text-emerald-600"
+                          : isActive
+                            ? "border-amber-500 text-amber-600"
+                            : "border-gray-200 text-gray-300"
+                      }`}
+                    >
+                      {isPast ? "✓" : i + 1}
+                    </div>
+                    {/* Text Wrapper */}
+                    <div className="mt-2 w-[110px] flex justify-center">
+                      <p
+                        className={`text-[9px] font-semibold text-center leading-tight
                         ${
                           isActive
-                            ? "border-amber-500 bg-amber-100 text-amber-700"
+                            ? "text-amber-700"
                             : isPast
-                              ? "border-emerald-500 bg-emerald-500 text-white"
-                              : "border-gray-200 bg-white text-gray-300"
+                              ? "text-emerald-700"
+                              : "text-gray-400"
                         }`}
-                      >
-                        {isPast ? "✓" : i + 1}
-                      </div>
-                      <p
-                        className={`text-[9px] font-semibold mt-1 text-center leading-tight max-w-[60px]
-                        ${isActive ? "text-amber-700" : isPast ? "text-emerald-700" : "text-gray-300"}`}
                       >
                         {step}
                       </p>
                     </div>
-                    {i < 3 && (
-                      <div
-                        className={`h-px flex-1 mb-4 -mx-1 ${isPast || isActive ? "bg-emerald-300" : "bg-gray-100"}`}
-                      />
-                    )}
                   </div>
                 );
               })}
@@ -546,11 +550,10 @@ function DetailModal({ row, onClose, onRelease }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 function Disbursement() {
-  const [rows, setRows] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+  const [actionError, setActionError] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStep, setProcessingStep] = useState(""); // granular step label
+  const [processingStep, setProcessingStep] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [selected, setSelected] = useState(null);
@@ -560,11 +563,10 @@ function Disbursement() {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: "date", dir: "desc" });
 
-  // ── Fetch ───────────────────────────────────────────────────────────────────
-  const fetchDisbursements = async () => {
-    setIsLoading(true);
-    setError("");
-    try {
+  // ── Fetch via React Query ───────────────────────────────────────────────────
+  const { data: rowsData, isLoading, error: queryError } = useQuery({
+    queryKey: ['disbursements'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("fin_disbursement")
         .select(
@@ -584,46 +586,50 @@ function Disbursement() {
         .order("disbursed_at", { ascending: false, nullsFirst: false });
 
       if (error) throw error;
-      setRows(
-        (data || []).map((item) => {
-          const pr = item.core1_payout_requests;
-          return {
-            id: item.id,
-            dvNo: item.dv_no,
-            apId: item.ap_id,
-            apRecordId: item.fin_accounts_payable?.id ?? null,
-            payee: item.fin_accounts_payable?.vendor_name ?? "N/A",
-            amount: Number(item.fin_accounts_payable?.amount ?? 0),
-            refNo: item.fin_accounts_payable?.ref_no ?? null,
-            description: item.fin_accounts_payable?.description ?? "—",
-            category: item.fin_accounts_payable?.category ?? "—",
-            apStatus: item.fin_accounts_payable?.status ?? "—",
-            status: item.status ?? "Pending Disbursement",
-            paymentMethod: item.payment_method ?? "—",
-            date: item.disbursed_at,
-            dateFormatted: formatDate(item.disbursed_at),
-            // ── Driver payout fields ─────────────────────────────────────────
-            payoutRequestId: item.payout_request_id ?? null,
-            payoutDriverId: pr?.driver_id ?? null,
-            payoutNetAmount: Number(pr?.net_amount ?? 0),
-            payoutFee: Number(pr?.fee ?? 0),
-            payoutMethod: pr?.method ?? null,
-            payoutAccountNumber: pr?.account_number ?? null,
-            payoutReferenceNo: pr?.reference_no ?? null,
-            payoutRequestStatus: pr?.status ?? null,
-          };
-        }),
-      );
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
+      return (data || []).map((item) => {
+        const pr = item.core1_payout_requests;
+        return {
+          id: item.id,
+          dvNo: item.dv_no,
+          apId: item.ap_id,
+          apRecordId: item.fin_accounts_payable?.id ?? null,
+          payee: item.fin_accounts_payable?.vendor_name ?? "N/A",
+          amount: Number(item.fin_accounts_payable?.amount ?? 0),
+          refNo: item.fin_accounts_payable?.ref_no ?? null,
+          description: item.fin_accounts_payable?.description ?? "—",
+          category: item.fin_accounts_payable?.category ?? "—",
+          apStatus: item.fin_accounts_payable?.status ?? "—",
+          status: item.status ?? "Pending Disbursement",
+          paymentMethod: item.payment_method ?? "—",
+          date: item.disbursed_at,
+          dateFormatted: formatDate(item.disbursed_at),
+          // ── Driver payout fields ─────────────────────────────────────────
+          payoutRequestId: item.payout_request_id ?? null,
+          payoutDriverId: pr?.driver_id ?? null,
+          payoutNetAmount: Number(pr?.net_amount ?? 0),
+          payoutFee: Number(pr?.fee ?? 0),
+          payoutMethod: pr?.method ?? null,
+          payoutAccountNumber: pr?.account_number ?? null,
+          payoutReferenceNo: pr?.reference_no ?? null,
+          payoutRequestStatus: pr?.status ?? null,
+        };
+      });
     }
-  };
+  });
 
+  const rows = rowsData || [];
+  const error = actionError || queryError?.message || "";
+
+  // ── Realtime Subscription ───────────────────────────────────────────────────
   useEffect(() => {
-    fetchDisbursements();
-  }, []);
+    const channel = supabase.channel('disbursement-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_disbursement' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['disbursements'] });
+      })
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [queryClient]);
 
   // ── Derived stats ───────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -682,21 +688,20 @@ function Disbursement() {
   const handleReleaseClick = (row) => {
     setSelected(row);
     setConfirmOpen(true);
-    setError("");
+    setActionError("");
   };
 
   const handleConfirmRelease = async () => {
     if (!selected || isProcessing) return;
 
-    // ── Guard: prevent double-release ─────────────────────────────────────────
     if (selected.status !== "Pending Disbursement") {
-      setError("This disbursement has already been released.");
+      setActionError("This disbursement has already been released.");
       return;
     }
 
     setIsProcessing(true);
     setProcessingStep("Updating disbursement status…");
-    setError("");
+    setActionError("");
 
     try {
       const now = new Date();
@@ -704,15 +709,15 @@ function Disbursement() {
       const { data: authData } = await supabase.auth.getUser();
       const authorizedBy = authData?.user?.email ?? "Finance Admin";
 
-      // ── 1. Update disbursement → Released ─────────────────────────────────
+      // ── 1. Update disbursement → Released
       const { error: disbErr } = await supabase
         .from("fin_disbursement")
         .update({ status: "Released", disbursed_at: nowISO })
         .eq("id", selected.id)
-        .eq("status", "Pending Disbursement"); // idempotency guard at DB level
+        .eq("status", "Pending Disbursement");
       if (disbErr) throw disbErr;
 
-      // ── 2. Mark AP record as Paid, stamp approver ─────────────────────────
+      // ── 2. Mark AP record as Paid
       setProcessingStep("Marking accounts payable as Paid…");
       if (selected.apRecordId) {
         const { error: apErr } = await supabase
@@ -726,9 +731,7 @@ function Disbursement() {
         if (apErr) throw apErr;
       }
 
-      // ── 3. Budget deduction (dual-path lookup) ─────────────────────────────
-      //   Path A: match via log1_budget_requests.po_reference → fin_budget_management.id
-      //   Path B: fallback — match fin_budget_categories.name → fin_budget_management
+      // ── 3. Budget deduction
       setProcessingStep("Deducting from budget…");
       let budgetRow = null;
 
@@ -782,26 +785,17 @@ function Disbursement() {
         if (budgetErr) console.warn("Budget deduction warning:", budgetErr);
       }
 
-      // ── 4. Update linked procurement record ────────────────────────────────
-      //   fin_accounts_payable.ref_no IS the log1_procurement.id (text PK)
-      //   log1_procurement has no po_number column — match on id directly
+      // ── 4. Update linked procurement record
       if (selected.refNo) {
         const { error: procErr, count } = await supabase
           .from("log1_procurement")
           .update({ status: "For Receiving" })
-          .eq("id", selected.refNo);    // ← was .eq("po_number") — column doesn't exist
-        if (procErr) console.warn("Procurement status update warning:", procErr.message);
-        else console.log(`[Release] log1_procurement id=${selected.refNo} → For Receiving (${count} row updated)`);
+          .eq("id", selected.refNo);
+        if (procErr)
+          console.warn("Procurement status update warning:", procErr.message);
       }
 
-      // ── 5. Post DOUBLE-ENTRY to General Ledger ─────────────────────────────
-      //
-      //   DR  5000-EXP  (Expense account)   → debit = amount,  credit = 0
-      //   CR  1010-CASH (Cash/Bank account)  → debit = 0,       credit = amount
-      //
-      //   Both legs share the same reference_id (fin_disbursement.id) so they
-      //   can be paired and traced back to this disbursement.
-      //
+      // ── 5. Post DOUBLE-ENTRY to General Ledger
       setProcessingStep("Posting double-entry to General Ledger…");
       const glDescription = `Disbursement | ${selected.dvNo} | ${selected.payee} | ${selected.category}`;
 
@@ -812,7 +806,7 @@ function Disbursement() {
           debit: selected.amount,
           credit: 0,
           account_code: GL_EXPENSE_ACCOUNT,
-          reference_id: selected.id, // UUID of fin_disbursement row
+          reference_id: selected.id,
           transaction_date: nowISO,
         });
       if (glDebitErr) throw glDebitErr;
@@ -829,39 +823,24 @@ function Disbursement() {
         });
       if (glCreditErr) throw glCreditErr;
 
-      // ── 6. Driver payout — stamp DV reference, NO wallet transaction ──────────
-      //
-      //  The Core1 PHP handler already:
-      //    a) Deducted wallet_balance when the driver SUBMITTED the request
-      //    b) Inserted a PAYOUT wallet transaction when APPROVING the request
-      //    c) Set payout_request.status = 'APPROVED'
-      //
-      //  So here we ONLY stamp the DV number onto admin_notes for traceability.
-      //  Inserting another wallet transaction here would be a DOUBLE DEDUCTION.
-      //
+      // ── 6. Driver payout stamping
       if (selected.payoutRequestId) {
         setProcessingStep("Stamping payout reference…");
-        // Just update admin_notes to record which DV released this payout.
-        // Do NOT change status (already APPROVED by Core1) and do NOT
-        // insert a wallet transaction (Core1 already did that on approval).
         await supabase
           .from("core1_payout_requests")
           .update({
             admin_notes: `Released via DV ${selected.dvNo} by ${authorizedBy} on ${nowISO}`,
           })
           .eq("id", selected.payoutRequestId);
-        // Non-fatal: if this fails, the release still succeeded — just no note
       }
 
-      // ── 7. Generate receipt PDF ────────────────────────────────────────────
-      // Note: authorizedBy already resolved at step 1 above
+      // ── 7. Generate receipt PDF
       setProcessingStep("Generating payment voucher PDF…");
       const referenceNumber = `PYMT-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const displayTimestamp = formatTimestamp(now);
 
       const doc = new jsPDF();
-      // ── PDF Layout ──────────────────────────────────────────────────────────
-      doc.setFillColor(30, 41, 59); // slate-800
+      doc.setFillColor(30, 41, 59);
       doc.rect(0, 0, 210, 40, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(18);
@@ -901,7 +880,6 @@ function Disbursement() {
         y += 9;
       });
 
-      // Amount box
       doc.setFillColor(236, 253, 245);
       doc.roundedRect(14, y + 4, 182, 22, 3, 3, "F");
       doc.setFontSize(10);
@@ -911,7 +889,6 @@ function Disbursement() {
       doc.setFontSize(16);
       doc.text(formatCurrency(selected.amount), 140, y + 16);
 
-      // GL section
       y += 36;
       doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
@@ -975,23 +952,11 @@ function Disbursement() {
         created_at: nowISO,
       });
 
-      // ── 8. Update local state (optimistic) ────────────────────────────────
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === selected.id
-            ? {
-                ...r,
-                status: "Released",
-                apStatus: "Paid",
-                payoutRequestStatus: r.payoutRequestId
-                  ? "APPROVED"
-                  : r.payoutRequestStatus,
-                date: nowISO,
-                dateFormatted: formatDate(nowISO),
-              }
-            : r,
-        ),
-      );
+      // ── 8. Refresh Queries to Sync UI
+      queryClient.invalidateQueries({ queryKey: ['disbursements'] });
+      queryClient.invalidateQueries({ queryKey: ['accountsPayable'] });
+      queryClient.invalidateQueries({ queryKey: ['budgetOverview'] });
+
       setReceiptData({
         pdfUrl,
         referenceNumber,
@@ -1004,7 +969,7 @@ function Disbursement() {
       setConfirmOpen(false);
       setReceiptOpen(true);
     } catch (err) {
-      setError("Release failed: " + err.message);
+      setActionError("Release failed: " + err.message);
     } finally {
       setIsProcessing(false);
       setProcessingStep("");
@@ -1031,643 +996,650 @@ function Disbursement() {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="max-w-7xl mx-auto space-y-6"
-    >
-      {/* ── Page Header ────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-white">
-              <Icon.List />
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="w-full space-y-6"
+      >
+        {/* ── Page Header ────────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+                Disbursement
+              </h1>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-              Disbursement
-            </h1>
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap mt-2">
-            {[
-              { label: "Budget Approved", done: true },
-              { label: "Pending Disbursement", active: true },
-              { label: "Finance Releases Payment" },
-              { label: "Released + GL Posted" },
-            ].map((step, i) => (
-              <div key={step.label} className="flex items-center gap-1.5">
-                {i > 0 && <span className="text-gray-300 text-xs">→</span>}
-                <span
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full
-                  ${
-                    step.done
-                      ? "bg-emerald-100 text-emerald-700"
-                      : step.active
-                        ? "bg-amber-100 text-amber-700 ring-1 ring-amber-300"
-                        : "text-gray-400"
-                  }`}
-                >
-                  {step.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <button
-          onClick={fetchDisbursements}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors font-medium self-start sm:self-auto"
-        >
-          <Icon.Refresh /> Refresh
-        </button>
-      </div>
-
-      {/* ── Summary Cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SummaryCard
-          label="Total Records"
-          value={stats.total}
-          icon={Icon.List}
-          colorClass="border-gray-200"
-          iconBg="bg-gray-100 text-gray-600"
-          sub="All disbursements"
-        />
-        <SummaryCard
-          label="Pending Release"
-          value={stats.pending}
-          icon={Icon.Clock}
-          colorClass="border-amber-200"
-          iconBg="bg-amber-100 text-amber-600"
-          sub={formatCurrency(stats.totalPending) + " to release"}
-        />
-        <SummaryCard
-          label="Released"
-          value={stats.released}
-          icon={Icon.Check}
-          colorClass="border-emerald-200"
-          iconBg="bg-emerald-100 text-emerald-600"
-          sub={formatCurrency(stats.totalReleased) + " disbursed"}
-        />
-        <SummaryCard
-          label="Total Released"
-          value={formatCurrency(stats.totalReleased)}
-          icon={Icon.Ledger}
-          colorClass="border-emerald-200"
-          iconBg="bg-emerald-100 text-emerald-600"
-          sub="GL auto double-entry posted"
-        />
-      </div>
-
-      {error && (
-        <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
-          <Icon.Warning /> {error}
-        </div>
-      )}
-
-      {/* ── Toolbar ────────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-              <Icon.Search />
-            </span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search DV No., payee, description, category…"
-              className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 bg-gray-50"
-            />
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {STATUS_FILTERS.map((f) => (
-              <button
-                key={f}
-                onClick={() => setStatusFilter(f)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap
-                  ${statusFilter === f ? "bg-slate-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-              >
-                {f === "All" ? "All" : (FLOW_LABELS[f]?.label ?? f)}
-              </button>
-            ))}
-          </div>
-        </div>
-        <p className="text-xs text-gray-400 mt-2 pl-1">
-          Showing{" "}
-          <span className="font-semibold text-gray-600">{filtered.length}</span>{" "}
-          of {rows.length} records
-        </p>
-      </div>
-
-      {/* ── Table ──────────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/80">
-                {[
-                  { label: "DV No.", key: "dvNo" },
-                  { label: "Payee", key: "payee" },
-                  { label: "Category", key: "category" },
-                  { label: "Description", key: "description" },
-                  { label: "Amount", key: "amount" },
-                  { label: "Method", key: "paymentMethod" },
-                  { label: "Status", key: "status" },
-                  { label: "Date", key: "date" },
-                  { label: "Actions", key: null },
-                ].map(({ label, key }) => (
-                  <th
-                    key={label}
-                    onClick={() => key && toggleSort(key)}
-                    className={`px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap
-                      ${key ? "cursor-pointer select-none hover:text-gray-700" : ""}`}
+            
+            {/* Header Workflow - Updated to 3 Steps */}
+            <div className="flex items-center gap-1.5 flex-wrap mt-2">
+              {[
+                { label: "Budget Approved", done: true },
+                { label: "Pending Disbursement", active: true },
+                { label: "Released & GL Posted" },
+              ].map((step, i) => (
+                <div key={step.label} className="flex items-center gap-1.5">
+                  {i > 0 && <span className="text-gray-300 text-xs">→</span>}
+                  <span
+                    className={`text-xs font-medium px-2.5 py-1 rounded-full
+                    ${
+                      step.done
+                        ? "bg-emerald-100 text-emerald-700"
+                        : step.active
+                          ? "bg-amber-100 text-amber-700 ring-1 ring-amber-300"
+                          : "text-gray-400"
+                    }`}
                   >
-                    {label}
-                    {key && <SortIcon k={key} />}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              <AnimatePresence>
-                {filtered.map((row, idx) => {
-                  const flow = FLOW_LABELS[row.status];
-                  const canRelease = row.status === "Pending Disbursement";
-                  return (
-                    <motion.tr
-                      key={row.id}
-                      layout
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ delay: idx * 0.015 }}
-                      className={`group transition-colors ${canRelease ? "hover:bg-amber-50/40" : "hover:bg-gray-50/60"}`}
-                    >
-                      <td className="px-4 py-3.5">
-                        <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
-                          {row.dvNo}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0">
-                            {row.payee?.charAt(0) ?? "?"}
-                          </div>
-                          <span className="text-gray-800 font-medium max-w-[130px] truncate">
-                            {row.payee}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full whitespace-nowrap">
-                          {row.category}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-gray-500 max-w-[160px]">
-                        <span
-                          className="truncate block text-xs"
-                          title={row.description}
-                        >
-                          {row.description}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className="font-bold text-gray-900 tabular-nums whitespace-nowrap text-sm">
-                          {formatCurrency(row.amount)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className="text-gray-500 text-xs font-medium whitespace-nowrap">
-                          {row.paymentMethod}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${flow?.color ?? "bg-gray-100 text-gray-600"}`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${flow?.dot ?? "bg-gray-400"}`}
-                          />
-                          {flow?.label ?? row.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-gray-400 text-xs whitespace-nowrap">
-                        {row.dateFormatted}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setSelected(row);
-                              setDetailOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-slate-700 hover:bg-gray-100 transition-colors"
-                            title="View details"
-                          >
-                            <Icon.Eye />
-                          </button>
-                          {canRelease && (
-                            <button
-                              onClick={() => handleReleaseClick(row)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 transition-colors shadow-sm whitespace-nowrap"
-                            >
-                              <Icon.Send /> Release
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </AnimatePresence>
-
-              {!isLoading && filtered.length === 0 && (
-                <tr>
-                  <td className="px-4 py-16 text-center" colSpan={9}>
-                    <div className="flex flex-col items-center gap-2 text-gray-400">
-                      <svg
-                        className="w-10 h-10 opacity-30"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={1.5}
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                      <p className="text-sm font-medium">
-                        No disbursements found
-                      </p>
-                      <p className="text-xs">
-                        Try adjusting your search or filter
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-
-              {isLoading && (
-                <tr>
-                  <td colSpan={9} className="px-4 py-4">
-                    <div className="space-y-2.5">
-                      {[...Array(5)].map((_, i) => (
-                        <div key={i} className="flex gap-3">
-                          {[...Array(10)].map((_, j) => (
-                            <div
-                              key={j}
-                              className={`h-7 rounded-lg bg-gray-100 animate-pulse ${j === 0 ? "w-28" : j === 4 ? "w-20" : "flex-1"}`}
-                            />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    {step.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['disbursements'] })}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors font-medium self-start sm:self-auto"
+          >
+            <Icon.Refresh /> Refresh
+          </button>
         </div>
 
-        {!isLoading && filtered.length > 0 && (
-          <div className="px-4 py-3 border-t border-gray-50 bg-gray-50/50 flex items-center justify-between">
-            <p className="text-xs text-gray-400">
-              {filtered.length} record{filtered.length !== 1 ? "s" : ""}
-            </p>
-            <p className="text-xs font-semibold text-gray-600">
-              Filtered Total:{" "}
-              {formatCurrency(filtered.reduce((s, r) => s + r.amount, 0))}
-            </p>
+        {/* ── Summary Cards ──────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <SummaryCard
+            label="Total Records"
+            value={stats.total}
+            icon={Icon.List}
+            colorClass="border-gray-200"
+            iconBg="bg-gray-100 text-gray-600"
+            sub="All disbursements"
+          />
+          <SummaryCard
+            label="Pending Release"
+            value={stats.pending}
+            icon={Icon.Clock}
+            colorClass="border-amber-200"
+            iconBg="bg-amber-100 text-amber-600"
+            sub={formatCurrency(stats.totalPending) + " to release"}
+          />
+          <SummaryCard
+            label="Released"
+            value={stats.released}
+            icon={Icon.Check}
+            colorClass="border-emerald-200"
+            iconBg="bg-emerald-100 text-emerald-600"
+            sub={formatCurrency(stats.totalReleased) + " disbursed"}
+          />
+          <SummaryCard
+            label="Total Released"
+            value={formatCurrency(stats.totalReleased)}
+            icon={Icon.Ledger}
+            colorClass="border-emerald-200"
+            iconBg="bg-emerald-100 text-emerald-600"
+            sub="GL auto double-entry posted"
+          />
+        </div>
+
+        {error && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-center gap-2">
+            <Icon.Warning /> {error}
           </div>
         )}
-      </div>
 
-      {/* ── Detail Modal ───────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {selected && detailOpen && (
-          <DetailModal
-            row={selected}
-            onClose={() => {
-              setDetailOpen(false);
-              setSelected(null);
-            }}
-            onRelease={(row) => {
-              setSelected(row);
-              setConfirmOpen(true);
-              setError("");
-            }}
-          />
-        )}
-      </AnimatePresence>
+        {/* ── Toolbar ────────────────────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <Icon.Search />
+              </span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search DV No., payee, description, category…"
+                className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:border-slate-300 bg-gray-50"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setStatusFilter(f)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap
+                    ${statusFilter === f ? "bg-slate-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                >
+                  {f === "All" ? "All" : (FLOW_LABELS[f]?.label ?? f)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-2 pl-1">
+            Showing{" "}
+            <span className="font-semibold text-gray-600">{filtered.length}</span>{" "}
+            of {rows.length} records
+          </p>
+        </div>
 
-      {/* ── Confirm Release Modal ──────────────────────────────────────────── */}
-      <AnimatePresence>
-        {selected && confirmOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-            onClick={() => !isProcessing && setConfirmOpen(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, y: 10 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 10 }}
-              transition={{ type: "spring", stiffness: 280, damping: 26 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-md w-full overflow-hidden max-h-[90vh] overflow-y-auto"
-            >
-              <div className="bg-amber-50 border-b border-amber-100 px-6 py-4 flex items-center gap-3 sticky top-0">
-                <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
-                  <Icon.Warning />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-gray-900">
-                    Confirm Fund Release
-                  </h2>
-                  <p className="text-xs text-amber-700">
-                    This action cannot be undone.
-                  </p>
-                </div>
-              </div>
+        {/* ── Table ──────────────────────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50/80">
+                  {[
+                    { label: "DV No.", key: "dvNo" },
+                    { label: "Payee", key: "payee" },
+                    { label: "Category", key: "category" },
+                    { label: "Description", key: "description" },
+                    { label: "Amount", key: "amount" },
+                    { label: "Method", key: "paymentMethod" },
+                    { label: "Status", key: "status" },
+                    { label: "Date", key: "date" },
+                    { label: "Actions", key: null },
+                  ].map(({ label, key }) => (
+                    <th
+                      key={label}
+                      onClick={() => key && toggleSort(key)}
+                      className={`px-4 py-3 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap
+                        ${key ? "cursor-pointer select-none hover:text-gray-700" : ""}`}
+                    >
+                      {label}
+                      {key && <SortIcon k={key} />}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                <AnimatePresence>
+                  {filtered.map((row, idx) => {
+                    const flow = FLOW_LABELS[row.status];
+                    const canRelease = row.status === "Pending Disbursement";
+                    return (
+                      <motion.tr
+                        key={row.id}
+                        layout
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ delay: idx * 0.015 }}
+                        className={`group transition-colors ${canRelease ? "hover:bg-amber-50/40" : "hover:bg-gray-50/60"}`}
+                      >
+                        <td className="px-4 py-3.5">
+                          <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                            {row.dvNo}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0">
+                              {row.payee?.charAt(0) ?? "?"}
+                            </div>
+                            <span className="text-gray-800 font-medium max-w-[130px] truncate">
+                              {row.payee}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="text-[11px] font-semibold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full whitespace-nowrap">
+                            {row.category}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-gray-500 max-w-[160px]">
+                          <span
+                            className="truncate block text-xs"
+                            title={row.description}
+                          >
+                            {row.description}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="font-bold text-gray-900 tabular-nums whitespace-nowrap text-sm">
+                            {formatCurrency(row.amount)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="text-gray-500 text-xs font-medium whitespace-nowrap">
+                            {row.paymentMethod}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${flow?.color ?? "bg-gray-100 text-gray-600"}`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${flow?.dot ?? "bg-gray-400"}`}
+                            />
+                            {flow?.label ?? row.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-gray-400 text-xs whitespace-nowrap">
+                          {row.dateFormatted}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setSelected(row);
+                                setDetailOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-slate-700 hover:bg-gray-100 transition-colors"
+                              title="View details"
+                            >
+                              <Icon.Eye />
+                            </button>
+                            {canRelease && (
+                              <button
+                                onClick={() => handleReleaseClick(row)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800 transition-colors shadow-sm whitespace-nowrap"
+                              >
+                                <Icon.Send /> Release
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                </AnimatePresence>
 
-              <div className="p-6">
-                <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                  Releasing will update the disbursement to{" "}
-                  <strong>Released</strong>, mark AP as <strong>Paid</strong>,
-                  deduct from budget, and automatically post a{" "}
-                  <strong>double-entry</strong> to the General Ledger.
-                  {selected.payoutRequestId && (
-                    <span className="block mt-1.5 text-emerald-600 font-medium">
-                      🏧 This is a driver payout — the payout request will be
-                      marked <strong>Approved</strong> and the driver's wallet
-                      balance will be updated.
-                    </span>
-                  )}
-                </p>
-
-                <div className="space-y-2 mb-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { label: "DV No.", value: selected.dvNo },
-                      {
-                        label: "Payment Method",
-                        value: selected.paymentMethod,
-                      },
-                      { label: "Payee", value: selected.payee },
-                      { label: "Category", value: selected.category },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="bg-gray-50 rounded-xl p-3">
-                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-0.5 tracking-wider">
-                          {label}
+                {!isLoading && filtered.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-16 text-center" colSpan={9}>
+                      <div className="flex flex-col items-center gap-2 text-gray-400">
+                        <svg
+                          className="w-10 h-10 opacity-30"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.5}
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        <p className="text-sm font-medium">
+                          No disbursements found
                         </p>
-                        <p className="text-xs font-semibold text-gray-800 truncate">
-                          {value}
+                        <p className="text-xs">
+                          Try adjusting your search or filter
                         </p>
                       </div>
-                    ))}
-                  </div>
-                  <div className="bg-gray-50 rounded-xl p-3">
-                    <p className="text-[10px] uppercase font-bold text-gray-400 mb-0.5 tracking-wider">
-                      Description
-                    </p>
-                    <p className="text-xs font-semibold text-gray-800">
-                      {selected.description}
-                    </p>
-                  </div>
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-                    <p className="text-[10px] uppercase font-bold text-emerald-600 mb-0.5 tracking-wider">
-                      Amount to Release
-                    </p>
-                    <p className="text-2xl font-bold text-emerald-700 tabular-nums">
-                      {formatCurrency(selected.amount)}
-                    </p>
-                  </div>
-                  <GLPreviewBadge
-                    dvNo={selected.dvNo}
-                    amount={selected.amount}
-                    category={selected.category}
-                  />
-                </div>
-
-                {error && (
-                  <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
-                    <Icon.Warning /> {error}
-                  </div>
+                    </td>
+                  </tr>
                 )}
 
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => setConfirmOpen(false)}
-                    disabled={isProcessing}
-                    className="px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleConfirmRelease}
-                    disabled={isProcessing}
-                    className="px-5 py-2 rounded-xl bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 disabled:opacity-60 flex items-center gap-2 transition-colors shadow-sm min-w-[160px] justify-center"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin shrink-0" />
-                        <span className="text-xs truncate">
-                          {processingStep || "Processing…"}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Icon.Send /> Confirm Release
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Receipt / Success Modal ────────────────────────────────────────── */}
-      <AnimatePresence>
-        {receiptData && receiptOpen && selected && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-            onClick={handleCloseReceipt}
-          >
-            <motion.div
-              initial={{ scale: 0.95, y: 10 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 10 }}
-              transition={{ type: "spring", stiffness: 280, damping: 26 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-lg w-full overflow-hidden max-h-[90vh] overflow-y-auto"
-            >
-              <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 px-6 py-5 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0">
-                  <Icon.Check />
-                </div>
-                <div>
-                  <h2 className="text-white font-bold text-base">
-                    Funds Released Successfully
-                  </h2>
-                  <p className="text-emerald-100 text-xs mt-0.5">
-                    Budget deducted · GL entry posted · Voucher ready
-                  </p>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-3">
-                <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                  <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
-                    Receipt Details
-                  </p>
-                  {[
-                    {
-                      label: "Reference No.",
-                      value: receiptData.referenceNumber,
-                    },
-                    { label: "Timestamp", value: receiptData.displayTimestamp },
-                    { label: "Authorized by", value: receiptData.authorizedBy },
-                  ].map(({ label, value }) => (
-                    <div
-                      key={label}
-                      className="flex justify-between text-xs gap-4"
-                    >
-                      <span className="text-gray-500 font-medium">{label}</span>
-                      <span className="text-gray-800 font-semibold text-right truncate">
-                        {value}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                  <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
-                    Payment Details
-                  </p>
-                  {[
-                    { label: "Payee", value: selected.payee },
-                    { label: "DV No.", value: selected.dvNo },
-                    { label: "Category", value: selected.category },
-                    { label: "Description", value: selected.description },
-                    { label: "Payment Method", value: selected.paymentMethod },
-                    ...(selected.payoutRequestId
-                      ? [
-                          {
-                            label: "Payout Ref No.",
-                            value: selected.payoutReferenceNo ?? "—",
-                          },
-                          {
-                            label: "Driver Account",
-                            value: selected.payoutAccountNumber ?? "—",
-                          },
-                        ]
-                      : []),
-                  ].map(({ label, value }) => (
-                    <div
-                      key={label}
-                      className="flex justify-between text-xs gap-4"
-                    >
-                      <span className="text-gray-500 font-medium">{label}</span>
-                      <span className="text-gray-800 font-semibold text-right truncate">
-                        {value}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-600">
-                      Amount Released
-                    </span>
-                    <span className="text-base font-bold text-emerald-700 tabular-nums">
-                      {formatCurrency(selected.amount)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* GL confirmation */}
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <Icon.Ledger />
-                    <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
-                      General Ledger Posted
-                    </p>
-                  </div>
-                  <div className="space-y-1.5">
-                    {[
-                      {
-                        type: "DR",
-                        account: GL_EXPENSE_ACCOUNT,
-                        label: `Expense — ${selected.category}`,
-                        amount: selected.amount,
-                        color: "text-red-600",
-                      },
-                      {
-                        type: "CR",
-                        account: GL_CASH_ACCOUNT,
-                        label: "Cash / Bank Account",
-                        amount: selected.amount,
-                        color: "text-emerald-700",
-                      },
-                    ].map((line) => (
-                      <div
-                        key={line.type}
-                        className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-emerald-100"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-[10px] font-black w-5 ${line.color}`}
-                          >
-                            {line.type}
-                          </span>
-                          <div>
-                            <p className="text-[10px] font-mono font-bold text-gray-500">
-                              {line.account}
-                            </p>
-                            <p className="text-xs text-gray-700">
-                              {line.label}
-                            </p>
+                {isLoading && (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-4">
+                      <div className="space-y-2.5">
+                        {[...Array(5)].map((_, i) => (
+                          <div key={i} className="flex gap-3">
+                            {[...Array(10)].map((_, j) => (
+                              <div
+                                key={j}
+                                className={`h-7 rounded-lg bg-gray-100 animate-pulse ${j === 0 ? "w-28" : j === 4 ? "w-20" : "flex-1"}`}
+                              />
+                            ))}
                           </div>
-                        </div>
-                        <span
-                          className={`text-xs font-bold tabular-nums ${line.color}`}
-                        >
-                          {formatCurrency(line.amount)}
-                        </span>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
 
-                <div className="flex justify-end gap-2 pt-1">
-                  <button
-                    onClick={handleCloseReceipt}
-                    className="px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+          {!isLoading && filtered.length > 0 && (
+            <div className="px-4 py-3 border-t border-gray-50 bg-gray-50/50 flex items-center justify-between">
+              <p className="text-xs text-gray-400">
+                {filtered.length} record{filtered.length !== 1 ? "s" : ""}
+              </p>
+              <p className="text-xs font-semibold text-gray-600">
+                Filtered Total:{" "}
+                {formatCurrency(filtered.reduce((s, r) => s + r.amount, 0))}
+              </p>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* ── Modals rendered via Portal to cover the entire screen ────────── */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <>
+            {/* ── Detail Modal ───────────────────────────────────────────────────── */}
+            <AnimatePresence>
+              {selected && detailOpen && (
+                <DetailModal
+                  row={selected}
+                  onClose={() => {
+                    setDetailOpen(false);
+                    setSelected(null);
+                  }}
+                  onRelease={(row) => {
+                    setSelected(row);
+                    setConfirmOpen(true);
+                    setActionError("");
+                  }}
+                />
+              )}
+            </AnimatePresence>
+
+            {/* ── Confirm Release Modal ──────────────────────────────────────────── */}
+            <AnimatePresence>
+              {selected && confirmOpen && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+                  onClick={() => !isProcessing && setConfirmOpen(false)}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ scale: 0.95, y: 10 }}
+                    transition={{ duration: 0.3 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full space-y-6 max-w-lg"
                   >
-                    Close
-                  </button>
-                  <button
-                    onClick={() =>
-                      receiptData.pdfUrl &&
-                      window.open(receiptData.pdfUrl, "_blank")
-                    }
-                    className="px-4 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-700 flex items-center gap-2 transition-colors shadow-sm"
+                    <div className="bg-emerald-50 border-b border-emerald-100 px-6 py-4 flex items-center gap-3 sticky top-0 rounded-t-2xl">
+                      <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                        <Icon.Warning />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-bold text-gray-900">
+                          Confirm Fund Release
+                        </h2>
+                        <p className="text-xs text-emerald-700">
+                          This action cannot be undone.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-6 bg-white rounded-b-2xl">
+                      <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                        Releasing will update the disbursement to{" "}
+                        <strong>Released</strong>, mark AP as <strong>Paid</strong>,
+                        deduct from budget, and automatically post a{" "}
+                        <strong>double-entry</strong> to the General Ledger.
+                        {selected.payoutRequestId && (
+                          <span className="block mt-1.5 text-emerald-600 font-medium">
+                            🏧 This is a driver payout — the payout request will be
+                            marked <strong>Approved</strong> and the driver's wallet
+                            balance will be updated.
+                          </span>
+                        )}
+                      </p>
+
+                      <div className="space-y-2 mb-4">
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { label: "DV No.", value: selected.dvNo },
+                            {
+                              label: "Payment Method",
+                              value: selected.paymentMethod,
+                            },
+                            { label: "Payee", value: selected.payee },
+                            { label: "Category", value: selected.category },
+                          ].map(({ label, value }) => (
+                            <div key={label} className="bg-gray-50 rounded-xl p-3">
+                              <p className="text-[10px] uppercase font-bold text-gray-400 mb-0.5 tracking-wider">
+                                {label}
+                              </p>
+                              <p className="text-xs font-semibold text-gray-800 truncate">
+                                {value}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-3">
+                          <p className="text-[10px] uppercase font-bold text-gray-400 mb-0.5 tracking-wider">
+                            Description
+                          </p>
+                          <p className="text-xs font-semibold text-gray-800">
+                            {selected.description}
+                          </p>
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                          <p className="text-[10px] uppercase font-bold text-emerald-600 mb-0.5 tracking-wider">
+                            Amount to Release
+                          </p>
+                          <p className="text-2xl font-bold text-emerald-700 tabular-nums">
+                            {formatCurrency(selected.amount)}
+                          </p>
+                        </div>
+                        <GLPreviewBadge
+                          dvNo={selected.dvNo}
+                          amount={selected.amount}
+                          category={selected.category}
+                        />
+                      </div>
+
+                      {error && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+                          <Icon.Warning /> {error}
+                        </div>
+                      )}
+
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setConfirmOpen(false)}
+                          disabled={isProcessing}
+                          className="px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 font-medium transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleConfirmRelease}
+                          disabled={isProcessing}
+                          className="px-5 py-2 rounded-xl bg-emerald-700 text-white text-sm font-bold hover:bg-emerald-800 disabled:opacity-60 flex items-center gap-2 transition-colors shadow-sm min-w-[160px] justify-center"
+                        >
+                          {isProcessing ? (
+                            <>
+                              <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin shrink-0" />
+                              <span className="text-xs truncate">
+                                {processingStep || "Processing…"}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Icon.Send /> Confirm Release
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* ── Receipt / Success Modal ────────────────────────────────────────── */}
+            <AnimatePresence>
+              {receiptData && receiptOpen && selected && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+                  onClick={handleCloseReceipt}
+                >
+                  <motion.div
+                    initial={{ scale: 0.95, y: 10 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.95, y: 10 }}
+                    transition={{ type: "spring", stiffness: 280, damping: 26 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-lg w-full overflow-hidden max-h-[90vh] overflow-y-auto"
                   >
-                    <Icon.Download /> Download Voucher PDF
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
+                    <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 px-6 py-5 flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0">
+                        <Icon.Check />
+                      </div>
+                      <div>
+                        <h2 className="text-white font-bold text-base">
+                          Funds Released Successfully
+                        </h2>
+                        <p className="text-emerald-100 text-xs mt-0.5">
+                          Budget deducted · GL entry posted · Voucher ready
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-6 space-y-3">
+                      <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                        <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
+                          Receipt Details
+                        </p>
+                        {[
+                          {
+                            label: "Reference No.",
+                            value: receiptData.referenceNumber,
+                          },
+                          { label: "Timestamp", value: receiptData.displayTimestamp },
+                          { label: "Authorized by", value: receiptData.authorizedBy },
+                        ].map(({ label, value }) => (
+                          <div
+                            key={label}
+                            className="flex justify-between text-xs gap-4"
+                          >
+                            <span className="text-gray-500 font-medium">{label}</span>
+                            <span className="text-gray-800 font-semibold text-right truncate">
+                              {value}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                        <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
+                          Payment Details
+                        </p>
+                        {[
+                          { label: "Payee", value: selected.payee },
+                          { label: "DV No.", value: selected.dvNo },
+                          { label: "Category", value: selected.category },
+                          { label: "Description", value: selected.description },
+                          { label: "Payment Method", value: selected.paymentMethod },
+                          ...(selected.payoutRequestId
+                            ? [
+                                {
+                                  label: "Payout Ref No.",
+                                  value: selected.payoutReferenceNo ?? "—",
+                                },
+                                {
+                                  label: "Driver Account",
+                                  value: selected.payoutAccountNumber ?? "—",
+                                },
+                              ]
+                            : []),
+                        ].map(({ label, value }) => (
+                          <div
+                            key={label}
+                            className="flex justify-between text-xs gap-4"
+                          >
+                            <span className="text-gray-500 font-medium">{label}</span>
+                            <span className="text-gray-800 font-semibold text-right truncate">
+                              {value}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                          <span className="text-xs font-bold text-gray-600">
+                            Amount Released
+                          </span>
+                          <span className="text-base font-bold text-emerald-700 tabular-nums">
+                            {formatCurrency(selected.amount)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* GL confirmation */}
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Icon.Ledger />
+                          <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
+                            General Ledger Posted
+                          </p>
+                        </div>
+                        <div className="space-y-1.5">
+                          {[
+                            {
+                              type: "DR",
+                              account: GL_EXPENSE_ACCOUNT,
+                              label: `Expense — ${selected.category}`,
+                              amount: selected.amount,
+                              color: "text-red-600",
+                            },
+                            {
+                              type: "CR",
+                              account: GL_CASH_ACCOUNT,
+                              label: "Cash / Bank Account",
+                              amount: selected.amount,
+                              color: "text-emerald-700",
+                            },
+                          ].map((line) => (
+                            <div
+                              key={line.type}
+                              className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-emerald-100"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-[10px] font-black w-5 ${line.color}`}
+                                >
+                                  {line.type}
+                                </span>
+                                <div>
+                                  <p className="text-[10px] font-mono font-bold text-gray-500">
+                                    {line.account}
+                                  </p>
+                                  <p className="text-xs text-gray-700">
+                                    {line.label}
+                                  </p>
+                                </div>
+                              </div>
+                              <span
+                                className={`text-xs font-bold tabular-nums ${line.color}`}
+                              >
+                                {formatCurrency(line.amount)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          onClick={handleCloseReceipt}
+                          className="px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                        >
+                          Close
+                        </button>
+                        <button
+                          onClick={() =>
+                            receiptData.pdfUrl &&
+                            window.open(receiptData.pdfUrl, "_blank")
+                          }
+                          className="px-4 py-2 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-700 flex items-center gap-2 transition-colors shadow-sm"
+                        >
+                          <Icon.Download /> Download Voucher PDF
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>,
+          document.body
         )}
-      </AnimatePresence>
-    </motion.div>
+    </>
   );
 }
 

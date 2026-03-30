@@ -10,8 +10,8 @@ export default function Layout() {
   const marginWidth = isExpanded ? '260px' : '72px'
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Pass state and toggle to Sidebar */}
+    <div className="flex h-screen bg-[#f8fafc] overflow-hidden">
+      {/* Sidebar */}
       <Sidebar isExpanded={isExpanded} toggleSidebar={toggleSidebar} />
       
       {/* Main Content Area */}
@@ -21,8 +21,10 @@ export default function Layout() {
       >
         <Header />
         
-        <main className="flex-1 overflow-y-auto px-4 md:px-6 py-6">
-          <div className="w-full max-w-6xl mx-auto">
+        {/* Main padding container - px-4 at md:px-6 para sakto lang ang lapit sa sides */}
+        <main className="flex-1 overflow-y-auto px-6 md:px-8 lg:px-10 py-8">
+          {/* TINANGGAL ANG MAX-WIDTH: W-full lang ang naiwan para palaging sagad sa gilid kahit i-zoom out */}
+          <div className="w-full mx-auto transition-all duration-300 ease-in-out">
             <Outlet />
           </div>
         </main>

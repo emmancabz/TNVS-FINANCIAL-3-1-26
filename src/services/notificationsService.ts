@@ -4,7 +4,7 @@ import type {
   FinNotificationInsert,
   FinNotificationUpdate,
 } from '../types/database'
-import { logAudit } from './auditLogService'
+import { logAudit } from './Auditlogservice'
 
 export async function fetchNotifications(limit = 20): Promise<FinNotification[]> {
   const { data, error } = await supabase
@@ -54,7 +54,7 @@ export async function markAllNotificationsRead() {
   if (error) throw error
 }
 
-export async function ensureNotification(content: string, type: 'budget' | 'message' | 'error' | 'info' | 'success') {
+export async function ensureNotification(content: string, type: 'budget' | 'message' | 'error' | 'info' | 'success' | 'reset' | 'payment') {
   const { data, error } = await supabase
     .from('fin_notifications')
     .select('id, created_at')

@@ -4,7 +4,7 @@ import type {
   FinBudgetManagementInsert,
   FinBudgetManagementUpdate,
 } from '../types/database'
-import { logAudit } from './auditLogService'
+import { logAudit } from './Auditlogservice'
 
 export type BudgetCategory = {
   id: string

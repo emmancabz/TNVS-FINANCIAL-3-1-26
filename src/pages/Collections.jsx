@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Calendar, ChevronLeft, ChevronRight, TrendingUp, Users, Wallet } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Calendar, ChevronLeft, ChevronRight, TrendingUp, Users, Wallet, BarChart3 } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../database/supabase'
 import {
   fetchCollectionsByDate,
@@ -35,97 +36,95 @@ const fmtCurrency = (value) =>
   })}`
 
 function Collections() {
-  const [rows, setRows] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [totalCollected, setTotalCollected] = useState(0)
   const [selectedDate, setSelectedDate] = useState(() => toPhilippinesDate(getPhilippinesNow()))
-  const [totalDrivers, setTotalDrivers] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
-  const [showCompare, setShowCompare] = useState(false)
-  const [compareLoading, setCompareLoading] = useState(false)
-  const [compareRows, setCompareRows] = useState([])
   const rowsPerPage = 10
 
-  useEffect(() => {
-    const load = async () => {
-      setIsLoading(true)
-      try {
-        const [data, total, drivers] = await Promise.all([
-          fetchCollectionsByDate(selectedDate),
-          fetchCollectionsTotalByDate(selectedDate),
-          fetchTotalDrivers(),
-        ])
-        setRows(data || [])
-        setTotalCollected(total || 0)
-        setTotalDrivers(drivers || 0)
-      } catch (err) {
-        console.error('Failed to load collections', err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    load()
-  }, [selectedDate])
+  const queryClient = useQueryClient()
 
+  // 1. MAIN DATA QUERY (Naka-cache na!)
+  const { data: mainData, isLoading } = useQuery({
+    queryKey: ['collections', selectedDate],
+    queryFn: async () => {
+      const [data, total, drivers] = await Promise.all([
+        fetchCollectionsByDate(selectedDate),
+        fetchCollectionsTotalByDate(selectedDate),
+        fetchTotalDrivers(),
+      ])
+      return {
+        rows: data || [],
+        totalCollected: total || 0,
+        totalDrivers: drivers || 0,
+      }
+    },
+  })
+
+  // Extract values mula sa cached data (may default values para di mag-error)
+  const rows = mainData?.rows || []
+  const totalCollected = mainData?.totalCollected || 0
+  const totalDrivers = mainData?.totalDrivers || 0
+
+  // 2. 7-DAY TREND DATA QUERY (Naka-cache na rin!)
+  const { data: compareRows = [], isLoading: compareLoading } = useQuery({
+    queryKey: ['collections-trend', selectedDate],
+    queryFn: async () => {
+      const data = await fetchCollectionsLast7DaysTotals(selectedDate)
+      return data || []
+    },
+  })
+
+  // I-reset ang pagination pag nagbago ang laman ng rows
   useEffect(() => {
     setCurrentPage(1)
   }, [rows.length])
 
+  // 3. REALTIME SUBSCRIPTION (Background Refresh)
   useEffect(() => {
     const isToday = selectedDate === toPhilippinesDate(getPhilippinesNow())
     if (!isToday) return
+
     const channel = supabase
       .channel('collections-live')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'core1_boundary_payments' },
         () => {
-          Promise.all([
-            fetchCollectionsByDate(selectedDate),
-            fetchCollectionsTotalByDate(selectedDate),
-          ]).then(([data, total]) => {
-            setRows(data || [])
-            setTotalCollected(total || 0)
-          })
+          // Walang loading screen, palihim lang na ire-refresh ng React Query sa background
+          queryClient.invalidateQueries({ queryKey: ['collections', selectedDate] })
+          queryClient.invalidateQueries({ queryKey: ['collections-trend', selectedDate] })
         }
       )
       .subscribe()
+
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [selectedDate])
+  }, [selectedDate, queryClient])
 
-  const totalPages = Math.max(1, Math.ceil((rows || []).length / rowsPerPage))
+
+  // Paginations at Calculations
+  const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage))
   const currentSafe = Math.min(currentPage, totalPages)
+  
   const paginatedRows = useMemo(() => {
     const start = (currentSafe - 1) * rowsPerPage
-    return (rows || []).slice(start, start + rowsPerPage)
+    return rows.slice(start, start + rowsPerPage)
   }, [rows, currentSafe])
 
   const paidCount = useMemo(() => {
-    const set = new Set((rows || []).map((r) => r?.driver_id).filter((x) => x != null))
+    const set = new Set(rows.map((r) => r?.driver_id).filter((x) => x != null))
     return set.size
   }, [rows])
 
   const unpaidCount = Math.max((totalDrivers || 0) - paidCount, 0)
   const paidPct = totalDrivers ? Math.round((paidCount / totalDrivers) * 100) : 0
+  
   const minDate = toPhilippinesDate(new Date(getPhilippinesNow().getTime() - 29 * DAY_MS))
   const maxDate = toPhilippinesDate(getPhilippinesNow())
 
-  const loadCompare = async () => {
-    setShowCompare(true)
-    setCompareLoading(true)
-    try {
-      const data = await fetchCollectionsLast7DaysTotals(selectedDate)
-      setCompareRows(data || [])
-    } finally {
-      setCompareLoading(false)
-    }
-  }
-
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 lg:p-10">
-      <div className="max-w-7xl mx-auto">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="w-full">
+      <div className="w-full">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1 tracking-tight">Collections</h1>
@@ -145,6 +144,8 @@ function Collections() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 items-stretch">
+          
+          {/* LEFT: MAIN TABLE */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden h-full lg:h-[640px] flex flex-col">
             <table className="w-full text-sm text-left flex-1">
               <thead className="bg-slate-50 border-b border-slate-200">
@@ -164,7 +165,7 @@ function Collections() {
                       </td>
                     </tr>
                   ))
-                ) : (rows || []).length === 0 ? (
+                ) : rows.length === 0 ? (
                   <>
                     <tr>
                       <td colSpan={4} className="px-6 py-4 text-center text-slate-600 font-semibold">
@@ -211,8 +212,8 @@ function Collections() {
               </tbody>
             </table>
 
-            {!isLoading && (rows || []).length > 0 && (
-              <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+            {!isLoading && rows.length > 0 && (
+              <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 bg-white shrink-0">
                 <span>
                   Page <span className="font-semibold">{currentSafe}</span> of{' '}
                   <span className="font-semibold">{totalPages}</span>
@@ -237,110 +238,91 @@ function Collections() {
             )}
           </div>
 
-          <div className="space-y-4 h-full lg:h-[640px] flex flex-col">
-            <button
-              type="button"
-              onClick={loadCompare}
-              className="w-full text-left rounded-2xl border border-slate-200 bg-white shadow-sm p-4 hover:bg-slate-50 transition flex-1"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Today</p>
-                  <p className="text-2xl font-black text-slate-900">{fmtCurrency(totalCollected)}</p>
-                  <p className="text-[11px] text-slate-500 mt-1">Tap to compare last 7 days</p>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 text-emerald-600 flex items-center justify-center">
-                  <Wallet className="w-5 h-5" />
+          {/* RIGHT: STATS & PROJECTIONS */}
+          <div className="space-y-6 h-full lg:h-[640px] flex flex-col">
+            
+            {/* CARD 1: Total Boundary + 7-Day Trend */}
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-5 border-b border-slate-100 bg-white z-10 shrink-0">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Boundary</p>
+                    <p className="text-3xl font-black text-slate-900 mt-1">{fmtCurrency(totalCollected)}</p>
+                  </div>
+                  <div className="w-12 h-12 rounded-2xl bg-slate-50 text-emerald-600 flex items-center justify-center border border-slate-100 shrink-0">
+                    <Wallet className="w-6 h-6" />
+                  </div>
                 </div>
               </div>
-            </button>
+              
+              <div className="p-5 flex-1 flex flex-col bg-slate-50 relative min-h-0">
+                <div className="flex items-center gap-2 mb-4 shrink-0">
+                  <BarChart3 className="w-4 h-4 text-slate-400 shrink-0" />
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">7-Day Trend</p>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2.5 pb-6">
+                  {compareLoading ? (
+                    <div className="text-slate-400 text-xs animate-pulse">Loading trends...</div>
+                  ) : compareRows.length === 0 ? (
+                    <div className="text-slate-400 text-xs">No data available.</div>
+                  ) : (
+                    compareRows.map((d) => (
+                      <div key={d?.date} className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/60 shadow-sm hover:border-emerald-200 transition-colors">
+                        <div className="text-xs font-medium text-slate-600">{d?.date}</div>
+                        <div className="text-sm font-bold text-slate-900">{fmtCurrency(d?.total)}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 flex-1">
+                <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none rounded-b-2xl" />
+              </div>
+            </div>
+
+            {/* CARD 2: Live Payment Projection */}
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 flex-shrink-0">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Live Payment Projection</p>
-                  <p className="text-sm text-slate-600 mt-1">Drivers paid vs unpaid</p>
+                  <p className="text-xs text-slate-500 mt-1">Drivers paid vs unpaid</p>
                 </div>
-                <div className="w-10 h-10 rounded-2xl bg-slate-100 text-emerald-600 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 text-emerald-600 flex items-center justify-center shrink-0">
                   <TrendingUp className="w-5 h-5" />
                 </div>
               </div>
 
-              <div className="mt-4">
+              <div className="mt-5">
                 <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
                   <span>Paid</span>
-                  <span>{paidPct}%</span>
+                  <span className="text-emerald-600 font-bold">{paidPct}%</span>
                 </div>
-                <div className="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden">
+                <div className="mt-2 h-2.5 rounded-full bg-slate-100 overflow-hidden">
                   <div
-                    className="h-full bg-emerald-600"
+                    className="h-full bg-emerald-500 transition-all duration-500 ease-out"
                     style={{ width: `${paidPct}%` }}
                   />
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                    <p className="text-[10px] uppercase font-bold text-slate-500">Paid</p>
-                    <p className="text-sm font-semibold text-slate-900">{paidCount}</p>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Paid</p>
+                    <p className="text-lg font-bold text-slate-800">{paidCount}</p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                    <p className="text-[10px] uppercase font-bold text-slate-500">Unpaid</p>
-                    <p className="text-sm font-semibold text-slate-900">{unpaidCount}</p>
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Unpaid</p>
+                    <p className="text-lg font-bold text-slate-800">{unpaidCount}</p>
                   </div>
                 </div>
-                <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-500">
-                  <Users className="w-4 h-4" />
+                <div className="mt-4 flex items-center gap-2 text-[11px] font-medium text-slate-400">
+                  <Users className="w-3.5 h-3.5 shrink-0" />
                   Total drivers tracked: {totalDrivers || 0}
                 </div>
               </div>
             </div>
+
           </div>
         </div>
       </div>
-
-      <AnimatePresence>
-        {showCompare && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-            onClick={() => setShowCompare(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.98, y: 10 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.98, y: 10 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden"
-            >
-              <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">7-Day Comparison</p>
-                  <p className="text-lg font-bold text-slate-900">Collections Trend</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowCompare(false)}
-                  className="px-3 py-1.5 rounded-xl border border-slate-200 text-emerald-700 text-xs font-semibold hover:bg-slate-50"
-                >
-                  Close
-                </button>
-              </div>
-              <div className="p-6 space-y-3">
-                {compareLoading && <div className="text-slate-400 text-sm">Loading…</div>}
-                {!compareLoading &&
-                  (compareRows || []).map((d) => (
-                    <div key={d?.date} className="flex items-center justify-between">
-                      <div className="text-sm text-slate-600">{d?.date}</div>
-                      <div className="text-sm font-semibold text-slate-900">{fmtCurrency(d?.total)}</div>
-                    </div>
-                  ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   )
 }

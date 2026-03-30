@@ -4,7 +4,7 @@ import type {
   FinDisbursementInsert,
   FinDisbursementUpdate,
 } from '../types/database'
-import { logAudit } from './auditLogService'
+import { logAudit } from './Auditlogservice'
 
 export async function fetchDisbursements(): Promise<FinDisbursement[]> {
   const { data, error } = await supabase

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LineChart,
@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../database/supabase";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,8 +58,6 @@ const UtilizationBar = ({ actual, committed, limit }) => {
     </div>
   );
 };
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 // ─── SMART CALENDAR COMPONENT ────────────────────────────────────────────────
 const EnterpriseCalendar = ({ requests, allocatedDates, depletedDates }) => {
@@ -209,27 +208,12 @@ const YearlyRequestFrequencyGraph = ({ data, onOpenBreakdown }) => {
 };
 
 function BudgetManagement() {
-  // ── Budget overview state ──────────────────────────────────────────────────
-  const [rows, setRows] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [metrics, setMetrics] = useState({ monthlyRevenue: 0, yearlyRevenue: 0 });
-
-  // ── Budget requests state — Operational (log1_budget_requests) ───────────
-  const [budgetRequests, setBudgetRequests] = useState([]);
-  const [requestsLoading, setRequestsLoading] = useState(true);
-  const [requestsError, setRequestsError] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Pending");
-
-  // ── Budget requests state — HR Training (hr_budget_requests) ──────────────
-  const [hrRequests, setHrRequests] = useState([]);
-  const [hrRequestsLoading, setHrRequestsLoading] = useState(true);
-  const [hrRequestsError, setHrRequestsError] = useState("");
-  const [hrStatusFilter, setHrStatusFilter] = useState("Pending");
+  const queryClient = useQueryClient();
 
   // ── Which requests tab is visible: "operational" | "hr" ───────────────────
   const [requestsTab, setRequestsTab] = useState("operational");
+  const [statusFilter, setStatusFilter] = useState("Pending");
+  const [hrStatusFilter, setHrStatusFilter] = useState("Pending");
 
   // ── Review modal state ─────────────────────────────────────────────────────
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -239,11 +223,6 @@ function BudgetManagement() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // ── Budget Setup Modal state ───────────────────────────────────────────────
-  // showBudgetSetup  = controls modal visibility
-  // allCategories    = all fin_budget_categories rows (including those with no budget row yet)
-  // setupDraft       = categoryId → { limitInput, periodYear, notes, budgetRowId | null }
-  // setupSaving      = loading state while upserting
-  // setupError       = error message inside the modal
   const [showBudgetSetup, setShowBudgetSetup] = useState(false);
   const [allCategories, setAllCategories] = useState([]);
   const [setupDraft, setSetupDraft] = useState({});
@@ -251,245 +230,171 @@ function BudgetManagement() {
   const [setupError, setSetupError] = useState("");
   const [freqModalOpen, setFreqModalOpen] = useState(false);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  // Look up a fin_budget_categories record by its UUID id.
-  // (Used by the budget setup modal, not by request cards/modal.)
-  const getCategoryById = useCallback(
-    (id) => categories.find((c) => c.id === id),
-    [categories],
-  );
-
-  // KEY INSIGHT — FK chain in the database:
-  //   log1_budget_requests.budget_category_id  →  fin_budget_management.id  (PK)
-  //   fin_budget_management.budget_category_id  →  fin_budget_categories.id  (PK)
-  //
-  // So a request's budgetManagementId IS the fin_budget_management PK (budgetId).
-  // We find the budget row directly by matching row.budgetId.
-  const getBudgetRowByManagementId = useCallback(
-    (budgetManagementId) => rows.find((r) => r.budgetId === budgetManagementId),
-    [rows],
-  );
-
-  // ── 1. Load Budget Overview ────────────────────────────────────────────────
-  const loadBudgetOverview = useCallback(async () => {
-    setIsLoading(true);
-    setError("");
-    try {
+  // ── 1. REACT QUERY: Budget Overview ────────────────────────────────────────
+  const { data: overviewData, isLoading, error: overviewErrorObj } = useQuery({
+    queryKey: ['budgetOverview'],
+    queryFn: async () => {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
       const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
       const startOfNextYear = new Date(now.getFullYear() + 1, 0, 1).toISOString();
       
-      const { data: revMonth, error: revMonthErr } = await supabase
+      const { data: revMonth } = await supabase
         .from("core1_boundary_payments")
-        .select("amount, payment_date")
+        .select("amount")
         .gte("payment_date", startOfMonth)
         .lt("payment_date", startOfNextMonth)
         .eq("status", "PAID");
-      if (revMonthErr) throw revMonthErr;
-      const { data: revYear, error: revYearErr } = await supabase
+        
+      const { data: revYear } = await supabase
         .from("core1_boundary_payments")
-        .select("amount, payment_date")
+        .select("amount")
         .gte("payment_date", startOfYear)
         .lt("payment_date", startOfNextYear)
         .eq("status", "PAID");
-      if (revYearErr) throw revYearErr;
-      
-      setMetrics({
+
+      const metrics = {
         monthlyRevenue: (revMonth || []).reduce((s, r) => s + Number(r?.amount || 0), 0),
         yearlyRevenue: (revYear || []).reduce((s, r) => s + Number(r?.amount || 0), 0)
-      });
+      };
 
-      const { data: allCats, error: catsErr } = await supabase
+      const { data: allCats } = await supabase
         .from("fin_budget_categories")
         .select("id, code, name, department, description, is_active")
         .eq("is_active", true);
-      if (catsErr) throw catsErr;
-      setCategories(allCats || []);
 
-      const { data: budgets, error: budgetErr } = await supabase
+      const { data: budgets } = await supabase
         .from("fin_budget_management")
-        .select(
-          `
-          id,
-          budget_category_id,
-          category,
-          limit_amount,
-          actual_spend,
-          committed_amount,
-          period_year,
-          period_month,
-          notes,
-          updated_at,
-          fin_budget_categories (
-            id, code, name, department, description, is_active
-          )
-        `,
-        )
+        .select(`id, budget_category_id, category, limit_amount, actual_spend, committed_amount, period_year, period_month, notes, updated_at, fin_budget_categories (id, code, name, department, description, is_active)`)
         .order("period_year", { ascending: false });
 
-      if (budgetErr) throw budgetErr;
+      const rows = (budgets || []).map((b) => ({
+        budgetId: b.id,
+        categoryId: b.budget_category_id,
+        name: b.fin_budget_categories?.name ?? b.category ?? "—",
+        code: b.fin_budget_categories?.code ?? "—",
+        department: b.fin_budget_categories?.department ?? "General",
+        limit: num(b.limit_amount),
+        actual: num(b.actual_spend),
+        committed: num(b.committed_amount),
+        periodYear: b.period_year,
+        periodMonth: b.period_month,
+        notes: b.notes ?? "",
+        updatedAt: b.updated_at ?? null,
+      }));
 
-      setRows(
-        (budgets || []).map((b) => ({
-          budgetId: b.id,
-          categoryId: b.budget_category_id,
-          name: b.fin_budget_categories?.name ?? b.category ?? "—",
-          code: b.fin_budget_categories?.code ?? "—",
-          department: b.fin_budget_categories?.department ?? "General",
-          limit: num(b.limit_amount),
-          actual: num(b.actual_spend),
-          committed: num(b.committed_amount),
-          periodYear: b.period_year,
-          periodMonth: b.period_month,
-          notes: b.notes ?? "",
-          updatedAt: b.updated_at ?? null,
-        })),
-      );
-    } catch (err) {
-      console.error("BUDGET OVERVIEW ERROR:", err);
-      setError("Failed to load budget overview.");
-    } finally {
-      setIsLoading(false);
+      return { metrics, categories: allCats || [], rows };
     }
-  }, []);
+  });
 
-  useEffect(() => {
-    loadBudgetOverview();
-  }, [loadBudgetOverview]);
+  const metrics = overviewData?.metrics || { monthlyRevenue: 0, yearlyRevenue: 0 };
+  const categories = overviewData?.categories || [];
+  const rows = overviewData?.rows || [];
+  const error = overviewErrorObj?.message || "";
 
-  // ── 2. Load Budget Requests ────────────────────────────────────────────────
-  const loadRequests = useCallback(async () => {
-    setRequestsLoading(true);
-    setRequestsError("");
-    try {
+  // ── 2. REACT QUERY: Operational Budget Requests ────────────────────────────
+  const { data: budgetRequests = [], isLoading: requestsLoading, error: reqErrorObj } = useQuery({
+    queryKey: ['budgetRequests'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("log1_budget_requests")
         .select("*")
         .order("created_at", { ascending: false });
-
       if (error) throw error;
-
-      setBudgetRequests(
-        (data || []).map((item) => ({
-          id: item.id,
-          // budgetManagementId = FK → fin_budget_management.id (NOT fin_budget_categories)
-          budgetManagementId: item.budget_category_id,
-          // categoryName is already stored on the request row — use it directly
-          categoryName: item.budget_category_name ?? "—",
-          poReference: item.po_reference,
-          requestedBy: item.requested_by_name,
-          requestedById: item.requested_by_id ?? null,
-          amount: num(item.requested_amount),
-          purpose: item.purpose ?? "—",
-          status: item.status ?? "Pending",
-          remarks: item.review_note ?? "",
-          createdAt: item.created_at,
-          reviewedBy: item.reviewed_by ?? null,
-          reviewedAt: item.reviewed_at ?? null,
-        })),
-      );
-    } catch {
-      setRequestsError("Failed to load budget requests.");
-    } finally {
-      setRequestsLoading(false);
+      return (data || []).map((item) => ({
+        id: item.id,
+        budgetManagementId: item.budget_category_id,
+        categoryName: item.budget_category_name ?? "—",
+        poReference: item.po_reference,
+        requestedBy: item.requested_by_name,
+        requestedById: item.requested_by_id ?? null,
+        amount: num(item.requested_amount),
+        purpose: item.purpose ?? "—",
+        status: item.status ?? "Pending",
+        remarks: item.review_note ?? "",
+        createdAt: item.created_at,
+        reviewedBy: item.reviewed_by ?? null,
+        reviewedAt: item.reviewed_at ?? null,
+      }));
     }
-  }, []);
+  });
+  const requestsError = reqErrorObj?.message || "";
 
-  useEffect(() => {
-    loadRequests();
-  }, [loadRequests]);
-
-  // ── 2b. Load HR Budget Requests ───────────────────────────────────────────
-  // Reads hr_budget_requests directly — no join needed because training_name
-  // is stored directly on the table (NOT NULL). The training_id FK to
-  // hr_training_programs is nullable and its column names are unknown, so
-  // we avoid the join entirely to prevent fetch failures.
-  const loadHrRequests = useCallback(async () => {
-    setHrRequestsLoading(true);
-    setHrRequestsError("");
-    try {
+  // ── 3. REACT QUERY: HR Budget Requests ─────────────────────────────────────
+  const { data: hrRequests = [], isLoading: hrRequestsLoading, error: hrReqErrorObj } = useQuery({
+    queryKey: ['hrRequests'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("hr_budget_requests")
-        .select(
-          "id, training_id, training_name, amount, submitted_date, approval_status, response_date, notes, created_at",
-        )
+        .select("id, training_id, training_name, amount, submitted_date, approval_status, response_date, notes, created_at")
         .order("created_at", { ascending: false });
-
       if (error) throw error;
-
-      setHrRequests(
-        (data || []).map((item) => ({
-          id: item.id,
-          _source: "hr", // used by modal handlers to route approve/reject correctly
-          trainingId: item.training_id,
-          trainingName: item.training_name || "—",
-          department: "HR",
-          amount: num(item.amount),
-          // Normalize to "status" so StatusBadge and filter tabs work identically
-          status: item.approval_status ?? "Pending",
-          notes: item.notes ?? "",
-          submittedDate: item.submitted_date,
-          responseDate: item.response_date,
-          createdAt: item.created_at,
-          // Fields expected by the shared review modal
-          categoryName: "HR Training",
-          requestedBy: "HR Department",
-          poReference: null, // generated at approve time
-          purpose: item.notes ?? "—",
-          budgetManagementId: null, // HR requests are not linked to fin_budget_management
-          remarks: "",
-        })),
-      );
-    } catch (err) {
-      setHrRequestsError("Failed to load HR budget requests: " + err.message);
-    } finally {
-      setHrRequestsLoading(false);
+      return (data || []).map((item) => ({
+        id: item.id,
+        _source: "hr",
+        trainingId: item.training_id,
+        trainingName: item.training_name || "—",
+        department: "HR",
+        amount: num(item.amount),
+        status: item.approval_status ?? "Pending",
+        notes: item.notes ?? "",
+        submittedDate: item.submitted_date,
+        responseDate: item.response_date,
+        createdAt: item.created_at,
+        categoryName: "HR Training",
+        requestedBy: "HR Department",
+        poReference: null,
+        purpose: item.notes ?? "—",
+        budgetManagementId: null,
+        remarks: "",
+      }));
     }
-  }, []);
+  });
+  const hrRequestsError = hrReqErrorObj?.message || "";
 
+  // ── 4. REALTIME SUBSCRIPTIONS ──────────────────────────────────────────────
   useEffect(() => {
-    loadHrRequests();
-  }, [loadHrRequests]);
+    const channel = supabase.channel('budget-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'log1_budget_requests' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['budgetRequests'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'hr_budget_requests' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['hrRequests'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_budget_management' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['budgetOverview'] });
+      })
+      .subscribe();
 
-  // ── 3. Budget Setup Modal — open ───────────────────────────────────────────
-  // Fetches ALL fin_budget_categories (not just those with a budget row),
-  // then pre-fills existing limit values into the draft so the admin sees
-  // everything in one place — including categories with no row yet.
-  const handleOpenBudgetSetup = async () => {
+    return () => supabase.removeChannel(channel);
+  }, [queryClient]);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const getCategoryById = useCallback((id) => categories.find((c) => c.id === id), [categories]);
+  const getBudgetRowByManagementId = useCallback((budgetManagementId) => rows.find((r) => r.budgetId === budgetManagementId), [rows]);
+
+  // ── Budget Setup Modal ─────────────────────────────────────────────────────
+  const handleOpenBudgetSetup = () => {
     setSetupError("");
     setShowBudgetSetup(true);
 
-    try {
-      // Fetch all categories from fin_budget_categories
-      const { data: cats, error: catsErr } = await supabase
-        .from("fin_budget_categories")
-        .select("id, code, name, department")
-        .eq("is_active", true)
-        .order("department");
+    // Re-use cached categories instead of fetching again!
+    setAllCategories(categories);
 
-      if (catsErr) throw catsErr;
-      setAllCategories(cats || []);
-
-      // Build draft: one entry per category
-      // Pre-fill from existing fin_budget_management rows if they exist
-      const currentYear = new Date().getFullYear();
-      const draft = {};
-      (cats || []).forEach((cat) => {
-        const existing = rows.find((r) => r.categoryId === cat.id);
-        draft[cat.id] = {
-          budgetRowId: existing?.budgetId ?? null,
-          limitInput: existing?.limit != null ? String(existing.limit) : "",
-          periodYear: existing?.periodYear ?? currentYear,
-          periodMonth: existing?.periodMonth ?? new Date().getMonth() + 1,
-          notes: existing?.notes ?? "",
-        };
-      });
-      setSetupDraft(draft);
-    } catch (err) {
-      setSetupError("Failed to load categories: " + err.message);
-    }
+    const currentYear = new Date().getFullYear();
+    const draft = {};
+    (categories || []).forEach((cat) => {
+      const existing = rows.find((r) => r.categoryId === cat.id);
+      draft[cat.id] = {
+        budgetRowId: existing?.budgetId ?? null,
+        limitInput: existing?.limit != null ? String(existing.limit) : "",
+        periodYear: existing?.periodYear ?? currentYear,
+        periodMonth: existing?.periodMonth ?? new Date().getMonth() + 1,
+        notes: existing?.notes ?? "",
+      };
+    });
+    setSetupDraft(draft);
   };
 
   const handleCloseSetup = () => {
@@ -498,7 +403,6 @@ function BudgetManagement() {
     setSetupSaving(false);
   };
 
-  // Update a single field in the draft for one category
   const updateDraft = (categoryId, field, value) => {
     setSetupDraft((prev) => ({
       ...prev,
@@ -506,14 +410,6 @@ function BudgetManagement() {
     }));
   };
 
-  // ── 4. Budget Setup Modal — save ───────────────────────────────────────────
-  // For each category in the draft:
-  //   • Row already exists (budgetRowId is set) → UPDATE using PK (id)
-  //   • No row yet                              → INSERT fresh row
-  //
-  // Does NOT rely on any unique constraint — safe even before the constraint
-  // is added to the database.
-  // actual_spend and committed_amount are NEVER modified here.
   const handleSaveBudgetLimits = async () => {
     setSetupSaving(true);
     setSetupError("");
@@ -535,12 +431,10 @@ function BudgetManagement() {
         const year = num(draft.periodYear) || currentYear;
         const month = num(draft.periodMonth) || currentMonth;
         
-        // 1. STRICT DATE GUARD
         if (year < currentYear || (year === currentYear && month < currentMonth)) {
             throw new Error(`Forbidden: You cannot set a budget for past dates (${cat.name}).`);
         }
         
-        // 2. REVENUE GUARD (Max 80% of Month or Year)
         const safetyCap = year > currentYear ? num(metrics.yearlyRevenue) * 0.8 : num(metrics.monthlyRevenue) * 0.8;
         if (limit > 0 && safetyCap <= 0) {
             throw new Error(`Revenue Guard: Cannot set budget for ${cat.name} because revenue baseline is zero.`);
@@ -588,7 +482,7 @@ function BudgetManagement() {
         if (error) throw error;
       }
 
-      await loadBudgetOverview();
+      queryClient.invalidateQueries({ queryKey: ['budgetOverview'] });
       handleCloseSetup();
     } catch (err) {
       console.error("BUDGET SETUP ERROR:", err);
@@ -604,6 +498,7 @@ function BudgetManagement() {
     setRemarks("");
     setActionError("");
   };
+  
   const handleCloseRequest = () => {
     setSelectedRequest(null);
     setDecision("approve");
@@ -613,11 +508,6 @@ function BudgetManagement() {
   };
 
   // ── 6. Approve ────────────────────────────────────────────────────────────
-  //
-  //  Branches on selectedRequest._source:
-  //    "operational" → existing log1_budget_requests flow (AP + committed_amount)
-  //    "hr"          → hr_budget_requests flow (AP only, no budget tracking)
-  //
   const handleApproveRequest = async () => {
     if (!selectedRequest || isProcessing) return;
     setIsProcessing(true);
@@ -625,12 +515,11 @@ function BudgetManagement() {
 
     try {
       const now = new Date().toISOString();
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const today = new Date().toISOString().slice(0, 10);
       const { data: auth } = await supabase.auth.getUser();
       const approverEmail = auth?.user?.email ?? "System";
       const approverUserId = auth?.user?.id ?? null;
 
-      // ── Resolve hr_proceedlist employee id for fin_accounts_payable ─────────
       let hrEmployeeId = 1;
       if (approverUserId) {
         const { data: hrRow } = await supabase
@@ -641,11 +530,7 @@ function BudgetManagement() {
         if (hrRow?.id) hrEmployeeId = hrRow.id;
       }
 
-      // ════════════════════════════════════════════════════════════════════════
       if (selectedRequest._source === "hr") {
-        // ── HR Training Budget Request ───────────────────────────────────────
-
-        // Guard: concurrent session check
         const { data: fresh, error: freshErr } = await supabase
           .from("hr_budget_requests")
           .select("approval_status")
@@ -653,14 +538,11 @@ function BudgetManagement() {
           .single();
         if (freshErr) throw freshErr;
         if (fresh?.approval_status !== "Pending") {
-          setActionError(
-            `This request is already ${fresh?.approval_status}. Refresh to see the latest state.`,
-          );
+          setActionError(`This request is already ${fresh?.approval_status}. Refresh to see the latest state.`);
           setIsProcessing(false);
           return;
         }
 
-        // Step 1 — Mark HR request as Approved
         const { error: hrUpdateErr } = await supabase
           .from("hr_budget_requests")
           .update({
@@ -671,57 +553,41 @@ function BudgetManagement() {
           .eq("id", selectedRequest.id);
         if (hrUpdateErr) throw hrUpdateErr;
 
-        // Step 2 — Create fin_accounts_payable for Finance to disburse
-        // Generate a ref_no since HR requests have no po_reference
         const hrRef = `HR-${String(selectedRequest.id).padStart(5, "0")}-${today.replace(/-/g, "")}`;
         const { data: apData, error: apErr } = await supabase
           .from("fin_accounts_payable")
-          .insert([
-            {
-              ref_no: hrRef,
-              vendor_name: selectedRequest.trainingName,
-              amount: selectedRequest.amount,
-              description: `HR Training Budget: ${selectedRequest.trainingName}${selectedRequest.notes ? " — " + selectedRequest.notes : ""}`,
-              status: "Pending",
-              category: "HR Training",
-              created_at: now,
-              employee_id: hrEmployeeId,
-            },
-          ])
+          .insert([{
+            ref_no: hrRef,
+            vendor_name: selectedRequest.trainingName,
+            amount: selectedRequest.amount,
+            description: `HR Training Budget: ${selectedRequest.trainingName}${selectedRequest.notes ? " — " + selectedRequest.notes : ""}`,
+            status: "Pending",
+            category: "HR Training",
+            created_at: now,
+            employee_id: hrEmployeeId,
+          }])
           .select()
           .single();
         if (apErr) throw apErr;
 
-        // Step 3 — Create fin_disbursement voucher
         const { error: dvErr } = await supabase
           .from("fin_disbursement")
-          .insert([
-            {
-              dv_no: `DV-${hrRef}`,
-              ap_id: apData.id,
-              status: "Pending Disbursement",
-              payment_method: "Bank Transfer",
-            },
-          ]);
+          .insert([{
+            dv_no: `DV-${hrRef}`,
+            ap_id: apData.id,
+            status: "Pending Disbursement",
+            payment_method: "Bank Transfer",
+          }]);
         if (dvErr) throw dvErr;
 
-        // Optimistic update + reload
-        setHrRequests((prev) =>
-          prev.map((r) =>
-            r.id === selectedRequest.id
-              ? { ...r, status: "Approved", remarks: remarks.trim() }
-              : r,
-          ),
-        );
-        await Promise.all([loadBudgetOverview(), loadHrRequests()]);
+        // Invalidate cache immediately instead of manual state updates
+        queryClient.invalidateQueries({ queryKey: ['hrRequests'] });
+        queryClient.invalidateQueries({ queryKey: ['budgetOverview'] });
         handleCloseRequest();
         return;
       }
 
-      // ════════════════════════════════════════════════════════════════════════
-      // ── Operational Budget Request (log1_budget_requests) ───────────────────
-
-      // Guard: concurrent session check
+      // Operational request flow
       const { data: fresh, error: freshErr } = await supabase
         .from("log1_budget_requests")
         .select("status")
@@ -729,19 +595,14 @@ function BudgetManagement() {
         .single();
       if (freshErr) throw freshErr;
       if (fresh?.status !== "Pending") {
-        setActionError(
-          `This request is already ${fresh?.status}. Refresh to see the latest state.`,
-        );
+        setActionError(`This request is already ${fresh?.status}. Refresh to see the latest state.`);
         setIsProcessing(false);
         return;
       }
 
-      // Guard: over-budget check
       const { data: budgetRow, error: budgetFetchErr } = await supabase
         .from("fin_budget_management")
-        .select(
-          "id, limit_amount, actual_spend, committed_amount, budget_category_id",
-        )
+        .select("id, limit_amount, actual_spend, committed_amount, budget_category_id")
         .eq("id", selectedRequest.budgetManagementId)
         .maybeSingle();
       if (budgetFetchErr) throw budgetFetchErr;
@@ -758,15 +619,11 @@ function BudgetManagement() {
       const available = currentLimit - currentActual - currentCommitted;
 
       if (currentLimit > 0 && selectedRequest.amount > available) {
-        setActionError(
-          `Approval would exceed the budget for "${selectedRequest.categoryName}". ` +
-            `Available: ₱${fmt(available)} | Requested: ₱${fmt(selectedRequest.amount)}`,
-        );
+        setActionError(`Approval would exceed the budget for "${selectedRequest.categoryName}". Available: ₱${fmt(available)} | Requested: ₱${fmt(selectedRequest.amount)}`);
         setIsProcessing(false);
         return;
       }
 
-      // Step 1 — Update log1_budget_requests
       const { error: updateErr } = await supabase
         .from("log1_budget_requests")
         .update({
@@ -778,39 +635,32 @@ function BudgetManagement() {
         .eq("id", selectedRequest.id);
       if (updateErr) throw updateErr;
 
-      // Step 2 — Insert fin_accounts_payable
       const { data: apData, error: apErr } = await supabase
         .from("fin_accounts_payable")
-        .insert([
-          {
-            ref_no: selectedRequest.poReference,
-            vendor_name: selectedRequest.requestedBy,
-            amount: selectedRequest.amount,
-            description: selectedRequest.purpose,
-            status: "Approved",
-            category: selectedRequest.categoryName,
-            created_at: now,
-            employee_id: hrEmployeeId,
-          },
-        ])
+        .insert([{
+          ref_no: selectedRequest.poReference,
+          vendor_name: selectedRequest.requestedBy,
+          amount: selectedRequest.amount,
+          description: selectedRequest.purpose,
+          status: "Approved",
+          category: selectedRequest.categoryName,
+          created_at: now,
+          employee_id: hrEmployeeId,
+        }])
         .select()
         .single();
       if (apErr) throw apErr;
 
-      // Step 3 — Insert fin_disbursement
       const { error: disburseErr } = await supabase
         .from("fin_disbursement")
-        .insert([
-          {
-            dv_no: `DV-${selectedRequest.poReference}`,
-            ap_id: apData.id,
-            status: "Pending Disbursement",
-            payment_method: "Bank Transfer",
-          },
-        ]);
+        .insert([{
+          dv_no: `DV-${selectedRequest.poReference}`,
+          ap_id: apData.id,
+          status: "Pending Disbursement",
+          payment_method: "Bank Transfer",
+        }]);
       if (disburseErr) throw disburseErr;
 
-      // Step 4 — Increment committed_amount (NOT actual_spend)
       if (budgetRow) {
         const { error: budgetUpdateErr } = await supabase
           .from("fin_budget_management")
@@ -822,14 +672,9 @@ function BudgetManagement() {
         if (budgetUpdateErr) throw budgetUpdateErr;
       }
 
-      setBudgetRequests((prev) =>
-        prev.map((r) =>
-          r.id === selectedRequest.id
-            ? { ...r, status: "Approved", remarks: remarks.trim() }
-            : r,
-        ),
-      );
-      await Promise.all([loadBudgetOverview(), loadRequests()]);
+      // Invalidate instead of manual updates
+      queryClient.invalidateQueries({ queryKey: ['budgetRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['budgetOverview'] });
       handleCloseRequest();
     } catch (err) {
       console.error("APPROVAL ERROR:", err);
@@ -849,7 +694,6 @@ function BudgetManagement() {
       const { data: auth } = await supabase.auth.getUser();
 
       if (selectedRequest._source === "hr") {
-        // ── HR Training rejection ──────────────────────────────────────────
         const { error: hrUpdateErr } = await supabase
           .from("hr_budget_requests")
           .update({
@@ -860,19 +704,12 @@ function BudgetManagement() {
           .eq("id", selectedRequest.id);
         if (hrUpdateErr) throw hrUpdateErr;
 
-        setHrRequests((prev) =>
-          prev.map((r) =>
-            r.id === selectedRequest.id
-              ? { ...r, status: "Rejected", remarks: remarks.trim() }
-              : r,
-          ),
-        );
-        await Promise.all([loadBudgetOverview(), loadHrRequests()]);
+        queryClient.invalidateQueries({ queryKey: ['hrRequests'] });
+        queryClient.invalidateQueries({ queryKey: ['budgetOverview'] });
         handleCloseRequest();
         return;
       }
 
-      // ── Operational rejection ──────────────────────────────────────────────
       const { error: updateErr } = await supabase
         .from("log1_budget_requests")
         .update({
@@ -883,14 +720,9 @@ function BudgetManagement() {
         })
         .eq("id", selectedRequest.id);
       if (updateErr) throw updateErr;
-      setBudgetRequests((prev) =>
-        prev.map((r) =>
-          r.id === selectedRequest.id
-            ? { ...r, status: "Rejected", remarks: remarks.trim() }
-            : r,
-        ),
-      );
-      await Promise.all([loadBudgetOverview(), loadRequests()]);
+
+      queryClient.invalidateQueries({ queryKey: ['budgetRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['budgetOverview'] });
       handleCloseRequest();
     } catch {
       setActionError("Failed to reject request. Please try again.");
@@ -923,12 +755,12 @@ function BudgetManagement() {
     hrStatusFilter === "All"
       ? (hrRequests || [])
       : (hrRequests || []).filter((r) => r.status === hrStatusFilter);
+      
   const totalAllocated = (rows || []).reduce((s, r) => s + num(r?.limit), 0);
   const totalSpent = (rows || []).reduce((s, r) => s + num(r?.actual), 0);
   const totalCommitted = (rows || []).reduce((s, r) => s + num(r?.committed), 0);
   const totalAvailable = totalAllocated - totalSpent - totalCommitted;
 
-  // ── Total of draft limits (live preview inside the setup modal) ────────────
   const draftTotal = (allCategories || []).reduce(
     (s, cat) => s + num(setupDraft[cat.id]?.limitInput),
     0,
@@ -1235,7 +1067,7 @@ function BudgetManagement() {
               </div>
             </div>
 
-            {/* Status filter tabs — change based on active source tab */}
+            {/* Status filter tabs */}
             <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
               {["Pending", "Approved", "Rejected", "All"].map((tab) => {
                 const counts =
@@ -1560,9 +1392,6 @@ function BudgetManagement() {
 
       {/* ════════════════════════════════════════════════════════════════════
           BUDGET SETUP MODAL
-          Finance Admin sets limit_amount per category for a given year.
-          Uses upsert on (budget_category_id, period_year) unique constraint.
-          actual_spend and committed_amount are NEVER modified here.
       ════════════════════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {showBudgetSetup && (

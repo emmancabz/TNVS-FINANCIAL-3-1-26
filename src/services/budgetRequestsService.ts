@@ -4,7 +4,7 @@ import type {
   FinBudgetRequestInsert,
   FinBudgetRequestUpdate,
 } from '../types/database'
-import { logAudit } from './auditLogService'
+import { logAudit } from './Auditlogservice'
 
 export async function fetchBudgetRequests(): Promise<FinBudgetRequest[]> {
   const { data, error } = await supabase

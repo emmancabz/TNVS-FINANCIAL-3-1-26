@@ -1,5 +1,17 @@
-node_modules/
+# Environment variables 
 .env
-supabase.exe
-.vscode/
-dist/
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
